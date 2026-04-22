@@ -1,0 +1,61 @@
+service: walidator-pomyslu
+
+frameworkVersion: "^4.0.0"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: eu-central-1
+  stage: ${opt:stage, 'prod'}
+  architecture: arm64
+  memorySize: 256
+  timeout: 10
+  logRetentionInDays: 14
+  environment:
+    STAGE: ${self:provider.stage}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "*"
+
+package:
+  individually: true
+  patterns:
+    - "!**/*"
+    - "src/handler.js"
+
+functions:
+  walidator:
+    handler: src/handler.handler
+    description: Walidator pomyslu - MVP szkielet (echo), AI dodamy w kroku 6.
+    events:
+      - httpApi:
+          path: /walidator
+          method: post
+      - httpApi:
+          path: /walidator
+          method: options
+
+custom:
+  # CORS dopuszczamy tylko produkcyjną subdomenę + tymczasowy CloudFront URL (dla testów
+  # przed ustawieniem DNS). Dodatkowy rekord aktualizujemy po utworzeniu CloudFront.
+  corsOrigins:
+    - https://walidator.racicki.com
+
+resources:
+  Outputs:
+    HttpApiEndpoint:
+      Description: Base URL API Gateway (httpApi)
+      Value:
+        Fn::Join:
+          - ""
+          - - "https://"
+            - Ref: HttpApi
+            - ".execute-api."
+            - ${self:provider.region}
+            - ".amazonaws.com"

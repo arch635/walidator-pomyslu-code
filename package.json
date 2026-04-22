@@ -1,0 +1,16 @@
+{
+  "name": "walidator-pomyslu-code",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Walidator pomysłów biznesowych - szkielet MVP (Lambda + API Gateway).",
+  "scripts": {
+    "deploy": "serverless deploy --stage prod",
+    "deploy:function": "serverless deploy function --function walidator --stage prod",
+    "remove": "serverless remove --stage prod",
+    "logs": "serverless logs --function walidator --stage prod --tail",
+    "invoke:local": "serverless invoke local --function walidator --stage prod --path test/event.json"
+  },
+  "devDependencies": {
+    "serverless": "^4.34.0"
+  }
+}

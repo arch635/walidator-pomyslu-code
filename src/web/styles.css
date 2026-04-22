@@ -1,0 +1,203 @@
+/* walidator.racicki.com - spójny ze stylem racicki.com (James Clear minimalizm) */
+
+:root {
+  --bg: #fafaf7;
+  --text: #111;
+  --text-muted: #4a4a4a;
+  --accent: #1a2a4a;
+  --accent-hover: #2a3f6b;
+  --border: #e2e2de;
+  --placeholder-bg: #eeeeea;
+  --placeholder-border: #cfcfc9;
+  --error: #9b2c2c;
+  --success: #1a5a3e;
+  --measure: 680px;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-top: 0;
+}
+h1 { font-size: 2.25rem; line-height: 1.15; margin-bottom: 1rem; }
+h2 { font-size: 1.75rem; line-height: 1.2; margin: 2.5rem 0 1rem; }
+h3 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 .75rem; font-weight: 600; }
+@media (min-width: 720px) {
+  h1 { font-size: 3rem; }
+  h2 { font-size: 2.25rem; }
+}
+
+p { margin: 0 0 1.1em; }
+a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--accent-hover); }
+.muted { color: var(--text-muted); font-size: 0.9rem; }
+.lede { font-size: 1.15rem; color: var(--text-muted); }
+
+ul { padding-left: 1.2em; }
+li { margin-bottom: .4em; }
+
+/* Nawigacja */
+.site-nav {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.site-nav__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.site-nav__logo {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+.site-nav__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-items: center;
+}
+.site-nav__menu a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+.site-nav__menu a:hover { color: var(--accent); }
+.site-nav__menu .nav-home {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text);
+  padding: 2px 0;
+}
+.site-nav__menu .nav-home:hover { color: var(--accent); }
+.site-nav__menu .nav-home svg { display: block; }
+
+/* Sekcje */
+main { display: block; }
+.section {
+  padding: 3rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.section:last-of-type { border-bottom: none; }
+.section__inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+.section--hero {
+  padding: 4rem 1.25rem 2rem;
+  background: linear-gradient(180deg, #f0efea 0%, var(--bg) 100%);
+}
+@media (min-width: 720px) {
+  .section { padding: 4rem 1.5rem; }
+  .section--hero { padding: 5rem 1.5rem 3rem; }
+}
+
+/* Formularz */
+form { margin: 1rem 0 0; }
+label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+textarea {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 140px;
+  transition: border-color 0.15s ease;
+}
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(26, 42, 74, 0.12);
+}
+.form-meta {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.4rem 0 1rem;
+}
+button[type="submit"] {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 0.85rem 1.5rem;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+button[type="submit"]:hover:not(:disabled) { background: var(--accent-hover); }
+button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Wynik */
+.result {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border-radius: 6px;
+  background: #f5f4ef;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+}
+.result--error { border-left-color: var(--error); }
+.result--success { border-left-color: var(--success); }
+.result h3 {
+  margin-top: 0;
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 1.25rem;
+}
+.result p:last-child { margin-bottom: 0; }
+
+/* Stopka */
+.site-footer {
+  background: #f0efea;
+  padding: 2rem 1.25rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.site-footer__inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+  text-align: center;
+}
+.site-footer a { color: var(--text); }

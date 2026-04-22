@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walidator pomysłu - Artur Racicki</title>
+<meta name="description" content="Szybki walidator pomysłów biznesowych wg metodologii Mom Test + CB Insights. Opisz pomysł w 2-3 zdaniach, dostaniesz analizę.">
+<link rel="canonical" href="https://walidator.racicki.com/">
+<meta name="robots" content="noindex,follow">
+<meta property="og:title" content="Walidator pomysłu - Artur Racicki">
+<meta property="og:description" content="Opisz pomysł w 2-3 zdaniach, dostaniesz szybką analizę.">
+<meta property="og:url" content="https://walidator.racicki.com/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pl_PL">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&display=swap"></noscript>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<nav class="site-nav" aria-label="Główna">
+  <div class="site-nav__inner">
+    <a href="https://racicki.com" class="site-nav__logo">Artur Racicki</a>
+    <ul class="site-nav__menu">
+      <li><a href="https://racicki.com" aria-label="Wróć na racicki.com" class="nav-home">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </a></li>
+      <li><a href="https://racicki.com/o-mnie">Kim jestem</a></li>
+      <li><a href="https://racicki.com/transfer-dla-biznesu">Transfer dla biznesu</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section class="section section--hero">
+    <div class="section__inner">
+      <h1>Walidator pomysłu</h1>
+      <p class="lede">Opisz swój pomysł biznesowy w 2-3 zdaniach. W kolejnym kroku zbudujemy analizę w oparciu o metodologię Mom Test, dane CB Insights i 20 lat doświadczeń w przedsiębiorczości.</p>
+      <p class="muted">Wersja MVP - szkielet. Analizę AI dodajemy w następnym kroku.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__inner">
+      <form id="walidator-form" novalidate>
+        <label for="pomysl">Twój pomysł</label>
+        <textarea id="pomysl" name="pomysl" rows="6" maxlength="2000"
+          placeholder="Np. Aplikacja, która pomaga młodym przedsiębiorcom walidować pomysły przez serię pytań Mom Test, zanim zaczną kodować."
+          required></textarea>
+        <div class="form-meta">
+          <span id="count" class="muted">0 / 2000 znaków</span>
+        </div>
+        <button type="submit" id="submit-btn">Sprawdź pomysł</button>
+      </form>
+
+      <div id="result" class="result" hidden aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__inner">
+      <h2>Jak to będzie działać</h2>
+      <p>To jest szkielet. W następnych krokach dodamy:</p>
+      <ul>
+        <li>Claude (AWS Bedrock) z promptem v2.0 - analiza pomysłu wg metodologii.</li>
+        <li>Zapis sesji w DynamoDB - żebyś mógł wrócić do historii.</li>
+        <li>Codzienny mail podsumowujący - co zostało zwalidowane i o czym warto podumać.</li>
+      </ul>
+      <p class="muted">Narzędzie jest prywatne, nie indeksowane. Kontakt: <a href="mailto:artur@racicki.com">artur@racicki.com</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <p>© 2026 Artur Racicki · <a href="https://racicki.com">racicki.com</a> · <a href="mailto:artur@racicki.com">artur@racicki.com</a></p>
+  </div>
+</footer>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

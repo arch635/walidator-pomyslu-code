@@ -1,0 +1,9 @@
+node_modules/
+.serverless/
+.env
+.env.*
+*.log
+.DS_Store
+
+# Wygenerowany frontend (app.js z wstrzyknietym API_ENDPOINT) - trzymamy w .build/
+.build/
