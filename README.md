@@ -38,6 +38,10 @@ infra/config.sh             # IDki zasobów AWS (commitowane, to nie sekrety)
 - Krok 7 (DynamoDB + tryb wieloetapowy + chat UX + prompt caching): **done**.
   25 tur + raport finalny, cache ~82% input, ~$0.08/sesja. Endpoints:
   `POST /walidator/turn`, `GET /walidator/session/{id}`.
-- Krok 8 (dzienny raport mailowy SES + EventBridge): todo.
+- Krok 8 (dzienny raport mailowy SES + EventBridge Scheduler): **done**.
+  Lambda `walidatorDailyReport` + Scheduler `walidator-daily-report-prod`
+  (cron 8:00 Europe/Warsaw). SES sandbox wystarczy, identity pending aż
+  Artur kliknie link weryfikacyjny.
+- Krok 9 (budget alarm $25 + CloudWatch alarmy): todo.
 
 Więcej w `../walidator-pomyslu/CHANGELOG.md`.

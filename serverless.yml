@@ -44,20 +44,28 @@ provider:
             - dynamodb:PutItem
             - dynamodb:UpdateItem
             - dynamodb:Query
+            - dynamodb:Scan
           Resource:
             - Fn::GetAtt: [SessionsTable, Arn]
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: "*"
 
 package:
   individually: true
   patterns:
     - "!**/*"
-    - "src/handler.js"
-    - "src/prompts/walidator-v2.md"
 
 functions:
   walidator:
     handler: src/handler.handler
     description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock) z promptem v2.0. /walidator (one-shot) + /walidator/turn (25 pytan z sesja w DynamoDB).
+    package:
+      patterns:
+        - "src/handler.js"
+        - "src/prompts/walidator-v2.md"
     events:
       - httpApi:
           path: /walidator
@@ -77,6 +85,22 @@ functions:
       - httpApi:
           path: /walidator/session/{id}
           method: options
+
+  walidatorDailyReport:
+    handler: src/daily_report.handler
+    description: Codzienny raport mailowy (SES) z aktywnosci walidatora w ostatnich 24h. Wywolywany przez EventBridge Scheduler 8:00 Europe/Warsaw.
+    memorySize: 256
+    timeout: 30
+    environment:
+      REPORT_TO: artur@racicki.com
+      REPORT_FROM: artur@racicki.com
+      LOOKBACK_HOURS: "24"
+      COST_PER_FINAL_SESSION: "0.083"
+      COST_PER_DIALOG_TURN: "0.0033"
+      COST_INFRA_DAILY: "0.0017"
+    package:
+      patterns:
+        - "src/daily_report.js"
 
 custom:
   corsOrigins:
@@ -106,6 +130,46 @@ resources:
           - Key: stage
             Value: ${self:provider.stage}
 
+    DailyReportSchedulerRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: walidator-daily-report-scheduler-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: scheduler.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: InvokeDailyReportLambda
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: lambda:InvokeFunction
+                  Resource:
+                    - Fn::GetAtt: [WalidatorDailyReportLambdaFunction, Arn]
+
+    DailyReportSchedule:
+      Type: AWS::Scheduler::Schedule
+      Properties:
+        Name: walidator-daily-report-${self:provider.stage}
+        Description: Codzienny raport mailowy walidatora (8:00 Europe/Warsaw)
+        ScheduleExpression: "cron(0 8 * * ? *)"
+        ScheduleExpressionTimezone: Europe/Warsaw
+        State: ENABLED
+        FlexibleTimeWindow:
+          Mode: "OFF"
+        Target:
+          Arn:
+            Fn::GetAtt: [WalidatorDailyReportLambdaFunction, Arn]
+          RoleArn:
+            Fn::GetAtt: [DailyReportSchedulerRole, Arn]
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
   Outputs:
     HttpApiEndpoint:
       Description: Base URL API Gateway (httpApi)
@@ -120,3 +184,9 @@ resources:
     SessionsTableName:
       Description: DynamoDB sessions table
       Value: !Ref SessionsTable
+    DailyReportScheduleName:
+      Description: EventBridge Scheduler schedule name
+      Value: !Ref DailyReportSchedule
+    DailyReportLambdaName:
+      Description: Daily report Lambda function name
+      Value: !Ref WalidatorDailyReportLambdaFunction
