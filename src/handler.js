@@ -10,14 +10,19 @@ const { DynamoDBDocumentClient, GetCommand, PutCommand } = require("@aws-sdk/lib
 const ALLOW_ORIGIN_REGEX = /^(https:\/\/walidator\.racicki\.com|https:\/\/[a-z0-9]+\.cloudfront\.net|http:\/\/localhost(:\d+)?)$/i;
 
 const PROMPT_PATH = process.env.PROMPT_PATH || "prompts/walidator-v2.md";
+const PROMPT_PATH_MINI = process.env.PROMPT_PATH_MINI || "prompts/walidator-mini.md";
 const MODEL_ID = process.env.BEDROCK_MODEL_ID || "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
 const BEDROCK_REGION = process.env.BEDROCK_REGION || process.env.AWS_REGION || "eu-central-1";
 const MAX_OUTPUT_TOKENS = parseInt(process.env.MAX_OUTPUT_TOKENS || "2500", 10);
 const MAX_OUTPUT_TOKENS_REPORT = parseInt(process.env.MAX_OUTPUT_TOKENS_REPORT || "3000", 10);
+const MAX_OUTPUT_TOKENS_REPORT_MINI = parseInt(process.env.MAX_OUTPUT_TOKENS_REPORT_MINI || "900", 10);
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE || "walidator-sessions-prod";
 const MAX_TURNS = parseInt(process.env.MAX_TURNS || "25", 10);
+const MAX_TURNS_MINI = parseInt(process.env.MAX_TURNS_MINI || "5", 10);
 const PROMPT_CACHE_ENABLED = (process.env.PROMPT_CACHE_ENABLED || "true").toLowerCase() === "true";
 const SESSION_TTL_DAYS = 30;
+const VALID_MODES = new Set(["mini", "full"]);
+const DEFAULT_MODE = "mini";
 
 const ONE_SHOT_OVERRIDE = `
 
@@ -137,16 +142,63 @@ Dokładnie te sekcje w tej kolejności (**pierwsza linia musi być** \`## Pierws
 Bądź krytyczny - zielone ma być rzadkie.
 `;
 
+const MINI_TURN_OVERRIDE = `
+
+---
+
+# WAŻNE: OBSŁUGA SESJI W BACKENDZIE (nadrzędne wobec sekcji START ROZMOWY)
+
+Backend przechowuje historię rozmowy w DynamoDB. **Pierwsza wiadomość użytkownika TO JUŻ jego odpowiedź na Pytanie 1** (opis pomysłu). NIE pytaj o opis ponownie - od razu zadaj Pytanie 2 (Klient).
+
+Frontend pokazuje licznik "Tura X z 5" na górze - **NIE numeruj pytań w treści wiadomości** ("Pytanie 2/5:" pomiń). Tylko samo pytanie, krótko (1-3 zdania).
+
+Jeśli odpowiedź jest ogólna (np. "z paroma osobami", "duży rynek") - dopytaj o konkret zanim przejdziesz dalej. Maksymalnie 1 follow-up per pytanie.
+
+**Generuj RAPORT KOŃCOWY** gdy spełniony jest jeden warunek:
+1. Otrzymałeś co najmniej **5 odpowiedzi merytorycznych** użytkownika (po jednej na każde z 5 pytań), LUB
+2. Otrzymałeś sygnał \`[WYGENERUJ RAPORT TERAZ]\` w ostatniej wiadomości użytkownika.
+
+**Pierwsza linia raportu MUSI brzmieć dokładnie**: \`# Twoja walidacja - szybki raport\` (backend wykrywa to jako sygnał końca sesji).
+
+Format raportu zgodnie z sekcją "RAPORT KOŃCOWY" w prompcie głównym - zachowaj wszystkie sekcje (Werdykt z emoji 🟢/🟡/🟠/🔴, Co zauważyłem, 3 kroki na 14 dni, Następny krok). Budżet: maksymalnie 800 tokenów - bądź zwięzły, lepiej zakończyć WERDYKTEM niż rozciągnąć.
+`;
+
 let BASE_PROMPT;
+let MINI_BASE_PROMPT;
 let SYSTEM_PROMPT_ERROR;
 try {
   BASE_PROMPT = fs.readFileSync(path.join(__dirname, PROMPT_PATH), "utf8");
 } catch (err) {
   SYSTEM_PROMPT_ERROR = err;
 }
+try {
+  MINI_BASE_PROMPT = fs.readFileSync(path.join(__dirname, PROMPT_PATH_MINI), "utf8");
+} catch (err) {
+  // Mini prompt nieobligatoryjne dla starego kodu (one-shot/full nie używają),
+  // ale logujemy żeby wykryć problem deploy'u.
+  console.error("Mini prompt load failed:", err.message);
+}
 
 const ONE_SHOT_SYSTEM = BASE_PROMPT ? BASE_PROMPT + ONE_SHOT_OVERRIDE : null;
-const MULTI_TURN_SYSTEM = BASE_PROMPT ? BASE_PROMPT + MULTI_TURN_OVERRIDE : null;
+const MULTI_TURN_SYSTEM_FULL = BASE_PROMPT ? BASE_PROMPT + MULTI_TURN_OVERRIDE : null;
+const MULTI_TURN_SYSTEM_MINI = MINI_BASE_PROMPT ? MINI_BASE_PROMPT + MINI_TURN_OVERRIDE : null;
+
+function systemForMode(mode) {
+  return mode === "mini" ? MULTI_TURN_SYSTEM_MINI : MULTI_TURN_SYSTEM_FULL;
+}
+
+function maxTurnsForMode(mode) {
+  return mode === "mini" ? MAX_TURNS_MINI : MAX_TURNS;
+}
+
+function maxReportTokensForMode(mode) {
+  return mode === "mini" ? MAX_OUTPUT_TOKENS_REPORT_MINI : MAX_OUTPUT_TOKENS_REPORT;
+}
+
+function normalizeMode(raw) {
+  const m = String(raw || "").toLowerCase();
+  return VALID_MODES.has(m) ? m : DEFAULT_MODE;
+}
 
 const bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION });
 const ddbDoc = DynamoDBDocumentClient.from(new DynamoDBClient({ region: BEDROCK_REGION }));
@@ -231,13 +283,14 @@ async function saveSession(session) {
 
 function nowIso() { return new Date().toISOString(); }
 
-function createSession(pomyslInitial) {
+function createSession(pomyslInitial, mode) {
   const nowSec = Math.floor(Date.now() / 1000);
   return {
     session_id: newSessionId(),
     started_at: nowIso(),
     last_activity: nowIso(),
     pomysl_initial: pomyslInitial,
+    mode: mode,
     turns: [],
     is_final: false,
     werdykt_koncowy: null,
@@ -259,9 +312,13 @@ function countUserTurns(session) {
 }
 
 // Detect final report by looking for the mandatory first header.
-// Question responses never start with "## Pierwsza reakcja".
-function looksLikeFinalReport(text) {
+// - Full mode: report starts with "## Pierwsza reakcja"
+// - Mini mode: report starts with "# Twoja walidacja - szybki raport"
+function looksLikeFinalReport(text, mode) {
   const firstLine = text.split("\n", 1)[0].trim();
+  if (mode === "mini") {
+    return /^#\s+Twoja walidacja\b/i.test(firstLine);
+  }
   return /^##\s*Pierwsza reakcja\b/i.test(firstLine);
 }
 
@@ -329,6 +386,7 @@ async function handleTurn(event, origin) {
 
   const requestedSessionId = payload.session_id;
   let session;
+  let mode;
 
   if (requestedSessionId) {
     session = await loadSession(requestedSessionId);
@@ -336,14 +394,25 @@ async function handleTurn(event, origin) {
     if (session.is_final) {
       return json(409, { status: "error", message: "Ta sesja została już zakończona raportem finalnym." }, origin);
     }
+    // Tryb sesji jest niezmienny - body.mode ignorowany przy kontynuacji.
+    // Stare sesje (sprzed wprowadzenia mini) nie mają mode -> traktuj jak full.
+    mode = session.mode || "full";
   } else {
-    session = createSession(message);
+    mode = normalizeMode(payload.mode);
+    session = createSession(message, mode);
+  }
+
+  // Sprawdź czy prompt dla danego mode się załadował (mini deploy mógł nie zadziałać).
+  const systemText = systemForMode(mode);
+  if (!systemText) {
+    return json(500, { status: "error", message: "Brak skonfigurowanego promptu dla tego trybu." }, origin);
   }
 
   session.turns.push({ role: "user", content: message, ts: nowIso() });
 
   const userTurns = countUserTurns(session);
-  const forceFinal = userTurns >= MAX_TURNS;
+  const maxTurnsThis = maxTurnsForMode(mode);
+  const forceFinal = userTurns >= maxTurnsThis;
 
   const messages = session.turns.map((t) => ({ role: t.role, content: t.content }));
   if (forceFinal) {
@@ -354,13 +423,13 @@ async function handleTurn(event, origin) {
 
   const started = Date.now();
   const { text, usage, stopReason } = await invokeClaude({
-    systemText: MULTI_TURN_SYSTEM,
+    systemText,
     messages,
-    maxTokens: forceFinal ? MAX_OUTPUT_TOKENS_REPORT : MAX_OUTPUT_TOKENS
+    maxTokens: forceFinal ? maxReportTokensForMode(mode) : MAX_OUTPUT_TOKENS
   });
   const elapsed = Date.now() - started;
 
-  const isFinal = looksLikeFinalReport(text);
+  const isFinal = looksLikeFinalReport(text, mode);
 
   session.turns.push({ role: "assistant", content: text, ts: nowIso() });
   touchSession(session);
@@ -376,6 +445,7 @@ async function handleTurn(event, origin) {
   console.log(JSON.stringify({
     event: "turn_ok",
     session_id: session.session_id,
+    mode,
     user_turn: userTurns,
     assistant_turn: turnNumber,
     is_final: isFinal,
@@ -391,8 +461,9 @@ async function handleTurn(event, origin) {
   return json(200, {
     status: "ok",
     session_id: session.session_id,
+    mode,
     turn_number: turnNumber,
-    max_turns: MAX_TURNS,
+    max_turns: maxTurnsThis,
     user_turn_number: userTurns,
     is_final: isFinal,
     response: text,
@@ -414,16 +485,18 @@ async function handleGetSession(event, origin) {
   const session = await loadSession(sessionId);
   if (!session) return json(404, { status: "error", message: "Sesja nie istnieje." }, origin);
 
+  const mode = session.mode || "full";
   return json(200, {
     status: "ok",
     session_id: session.session_id,
     started_at: session.started_at,
     last_activity: session.last_activity,
     pomysl_initial: session.pomysl_initial,
+    mode,
     turns: session.turns,
     is_final: session.is_final,
     werdykt: session.werdykt_koncowy || null,
-    max_turns: MAX_TURNS
+    max_turns: maxTurnsForMode(mode)
   }, origin);
 }
 

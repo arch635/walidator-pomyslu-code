@@ -7,13 +7,20 @@ do tego repo). Czytaj w kolejności: `README.md` → `ARCHITECTURE.md` → `AWS-
 
 ## Jak działa
 
-Użytkownik wchodzi na `walidator.racicki.com`, wpisuje pomysł biznesowy w 2-3 zdaniach
-i przechodzi przez 25-turową sesję sokratejską z Claude Haiku 4.5 (Bedrock EU).
-Po ostatniej turze dostaje raport finalny w 9 sekcjach z werdyktem 🟢/🟡/🟠/🔴.
+Użytkownik wchodzi na `walidator.racicki.com` i wybiera tryb:
 
-Cała sesja żyje w DynamoDB (TTL 30 dni), frontend trzyma `session_id` w `localStorage`.
-Codziennie o 8:00 (Europe/Warsaw) druga Lambda skanuje DDB i wysyła Arturowi mail
-SES z podsumowaniem: ile sesji, jakie werdykty, top red flagi.
+- **MINI** (5 pytań, ~5 min) - lead magnet, krótki raport (~900 tok)
+  z werdyktem + 3 kroki na 14 dni + CTA do pełnej.
+- **PEŁNA** (25 pytań, ~25 min) - 9-sekcyjny raport (cytaty, red flagi,
+  plan na 30 dni, polecana lektura).
+
+Default tryb: MINI (niska bariera wejścia, więcej leadów). Tryb zalockowany
+po pierwszej wysłanej wiadomości - toggle znika.
+
+Sesja żyje w DynamoDB (TTL 30 dni) z polem `mode`, frontend trzyma
+`session_id` w `localStorage`. Codziennie o 8:00 (Europe/Warsaw) druga
+Lambda skanuje DDB i wysyła Arturowi mail SES z podsumowaniem: breakdown
+mini vs pełne, werdykty per tryb, koszt rozdzielony.
 
 Pełna architektura + 3 flowy + mapa kosztów: `../walidator-pomyslu/ARCHITECTURE.md`.
 

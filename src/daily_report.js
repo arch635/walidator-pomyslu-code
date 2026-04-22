@@ -14,7 +14,14 @@ const REPORT_FROM = process.env.REPORT_FROM || "artur@racicki.com";
 const LOOKBACK_HOURS = parseInt(process.env.LOOKBACK_HOURS || "24", 10);
 const COST_PER_FINAL_SESSION = parseFloat(process.env.COST_PER_FINAL_SESSION || "0.083");
 const COST_PER_DIALOG_TURN = parseFloat(process.env.COST_PER_DIALOG_TURN || "0.0033");
+const COST_PER_FINAL_SESSION_MINI = parseFloat(process.env.COST_PER_FINAL_SESSION_MINI || "0.013");
+const COST_PER_DIALOG_TURN_MINI = parseFloat(process.env.COST_PER_DIALOG_TURN_MINI || "0.0007");
 const COST_INFRA_DAILY = parseFloat(process.env.COST_INFRA_DAILY || "0.0017"); // ~$0.05/mo / 30 dni
+
+// Stare sesje (sprzed wprowadzenia mini) nie maja pola mode - traktuj jak full.
+function modeOf(s) {
+  return s.mode === "mini" ? "mini" : "full";
+}
 
 const ddbDoc = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 const ses = new SESv2Client({ region: REGION });
@@ -85,23 +92,58 @@ function topN(counts, n) {
 }
 
 function estimateCostUsd(sessions) {
-  let bedrock = 0;
+  let bedrockFull = 0;
+  let bedrockMini = 0;
   for (const s of sessions) {
+    const isMini = modeOf(s) === "mini";
+    const finalCost = isMini ? COST_PER_FINAL_SESSION_MINI : COST_PER_FINAL_SESSION;
+    const turnCost = isMini ? COST_PER_DIALOG_TURN_MINI : COST_PER_DIALOG_TURN;
+    let cost;
     if (s.is_final) {
-      bedrock += COST_PER_FINAL_SESSION;
+      cost = finalCost;
     } else {
       const userTurns = (s.turns || []).filter((t) => t.role === "user").length;
-      bedrock += userTurns * COST_PER_DIALOG_TURN;
+      cost = userTurns * turnCost;
     }
+    if (isMini) bedrockMini += cost; else bedrockFull += cost;
   }
-  return { bedrock, infra: COST_INFRA_DAILY, total: bedrock + COST_INFRA_DAILY };
+  const bedrock = bedrockFull + bedrockMini;
+  return {
+    bedrock,
+    bedrock_full: bedrockFull,
+    bedrock_mini: bedrockMini,
+    infra: COST_INFRA_DAILY,
+    total: bedrock + COST_INFRA_DAILY
+  };
+}
+
+function emptyVerdicts() {
+  return { "🟢": 0, "🟡": 0, "🟠": 0, "🔴": 0, unknown: 0 };
+}
+
+function perModeStats(sessions, sinceIso, modeName) {
+  const filtered = sessions.filter((s) => modeOf(s) === modeName);
+  const started = filtered.filter((s) => s.started_at >= sinceIso);
+  const finals = filtered.filter((s) => s.is_final);
+  const verdicts = emptyVerdicts();
+  for (const s of finals) {
+    const emoji = emojiFromWerdykt(s.werdykt_koncowy);
+    if (emoji) verdicts[emoji] += 1;
+    else verdicts.unknown += 1;
+  }
+  return {
+    total: filtered.length,
+    started: started.length,
+    finals: finals.length,
+    verdicts
+  };
 }
 
 function aggregate(sessions, sinceIso) {
   const started = sessions.filter((s) => s.started_at >= sinceIso);
   const finals = sessions.filter((s) => s.is_final);
 
-  const verdicts = { "🟢": 0, "🟡": 0, "🟠": 0, "🔴": 0, unknown: 0 };
+  const verdicts = emptyVerdicts();
   const verdictLabels = {};
   const redFlagCounts = {};
 
@@ -127,6 +169,7 @@ function aggregate(sessions, sinceIso) {
     .map((s) => ({
       excerpt: s.pomysl_initial.slice(0, 110) + (s.pomysl_initial.length > 110 ? "..." : ""),
       session_id: s.session_id,
+      mode: modeOf(s),
       werdykt: s.werdykt_koncowy || null
     }));
 
@@ -140,7 +183,9 @@ function aggregate(sessions, sinceIso) {
     verdict_labels: verdictLabels,
     top_red_flags: topN(redFlagCounts, 3),
     top_ideas: ideas,
-    cost
+    cost,
+    mini: perModeStats(sessions, sinceIso, "mini"),
+    full: perModeStats(sessions, sinceIso, "full")
   };
 }
 
@@ -158,6 +203,11 @@ function ddbConsoleUrl() {
 }
 
 function formatCost(v) { return "$" + v.toFixed(4); }
+
+function verdictLine(v) {
+  return `🟢 ${v["🟢"]} / 🟡 ${v["🟡"]} / 🟠 ${v["🟠"]} / 🔴 ${v["🔴"]}`
+    + (v.unknown ? ` / (bez werdyktu) ${v.unknown}` : "");
+}
 
 function renderPlainText(agg, since, now) {
   const lines = [];
@@ -178,7 +228,20 @@ function renderPlainText(agg, since, now) {
     return lines.join("\n");
   }
 
-  lines.push("Werdykty (tylko sesje zakonczone):");
+  lines.push("Sesje per tryb:");
+  lines.push(`  Mini (5 pytan):  ${agg.mini.started} rozpoczetych, ${agg.mini.finals} ukonczonych`);
+  lines.push(`  Pelne (25 pytan): ${agg.full.started} rozpoczetych, ${agg.full.finals} ukonczonych`);
+  lines.push("");
+
+  if (agg.mini.finals > 0) {
+    lines.push(`Werdykty mini: ${verdictLine(agg.mini.verdicts)}`);
+  }
+  if (agg.full.finals > 0) {
+    lines.push(`Werdykty pelne: ${verdictLine(agg.full.verdicts)}`);
+  }
+  if (agg.mini.finals > 0 || agg.full.finals > 0) lines.push("");
+
+  lines.push("Werdykty (lacznie):");
   const vLabels = agg.verdict_labels;
   const vRows = [
     ["🟢 ZIELONE", agg.verdicts["🟢"], vLabels["🟢"]],
@@ -203,14 +266,16 @@ function renderPlainText(agg, since, now) {
   if (agg.top_ideas.length) {
     lines.push("Top 3 pomysly (najswiezsze):");
     agg.top_ideas.forEach((idea, i) => {
-      lines.push(`  ${i + 1}. "${idea.excerpt}"`);
+      lines.push(`  ${i + 1}. [${idea.mode}] "${idea.excerpt}"`);
       if (idea.werdykt) lines.push(`     -> ${idea.werdykt}`);
     });
     lines.push("");
   }
 
-  lines.push("Koszt szacunkowy:");
-  lines.push(`  Bedrock (sesje): ${formatCost(agg.cost.bedrock)}`);
+  lines.push("Koszt szacunkowy (dzienny):");
+  lines.push(`  Bedrock mini:  ${formatCost(agg.cost.bedrock_mini)}`);
+  lines.push(`  Bedrock pelne: ${formatCost(agg.cost.bedrock_full)}`);
+  lines.push(`  Bedrock razem: ${formatCost(agg.cost.bedrock)}`);
   lines.push(`  Infra (Lambda/DDB/CW/SES): ${formatCost(agg.cost.infra)}`);
   lines.push(`  RAZEM: ${formatCost(agg.cost.total)}`);
   lines.push("");
@@ -243,7 +308,23 @@ function renderHtml(agg, since, now) {
     h.push('<p style="background:#fff; padding:16px; border-radius:6px; border:1px solid #e2e2de; color:#4a4a4a;">Zero aktywnosci w oknie 24h. Scheduler zyje, codzienny cron dziala poprawnie.</p>');
     h.push(`<p style="font-size:14px; color:#4a4a4a;">Koszt szacunkowy dzienny: <b>${formatCost(agg.cost.total)}</b> (tylko infra, bez Bedrock).</p>`);
   } else {
-    h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Werdykty</h3>');
+    h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Sesje per tryb</h3>');
+    h.push('<table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e2e2de; border-radius:6px;">');
+    h.push('<tr><th style="text-align:left; padding:8px 14px; border-bottom:1px solid #f0efea; font-size:12px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Tryb</th><th style="text-align:right; padding:8px 14px; border-bottom:1px solid #f0efea; font-size:12px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Rozpoczete</th><th style="text-align:right; padding:8px 14px; border-bottom:1px solid #f0efea; font-size:12px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Ukonczone</th><th style="text-align:left; padding:8px 14px; border-bottom:1px solid #f0efea; font-size:12px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Werdykty</th></tr>');
+    const modeRows = [
+      ["Mini (5 pytan)", agg.mini],
+      ["Pelne (25 pytan)", agg.full]
+    ];
+    for (const [label, m] of modeRows) {
+      const v = m.verdicts;
+      const verdictHtml = m.finals > 0
+        ? `🟢 ${v["🟢"]} &middot; 🟡 ${v["🟡"]} &middot; 🟠 ${v["🟠"]} &middot; 🔴 ${v["🔴"]}` + (v.unknown ? ` &middot; ? ${v.unknown}` : "")
+        : '<span style="color:#4a4a4a;">—</span>';
+      h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">${escapeHtml(label)}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${m.started}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${m.finals}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; font-size:14px;">${verdictHtml}</td></tr>`);
+    }
+    h.push('</table>');
+
+    h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Werdykty (lacznie)</h3>');
     h.push('<table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e2e2de; border-radius:6px;">');
     const rows = [
       ["🟢", "ZIELONE", agg.verdicts["🟢"], agg.verdict_labels["🟢"]],
@@ -272,14 +353,17 @@ function renderHtml(agg, since, now) {
       h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Najswiezsze pomysly</h3>');
       h.push('<ol style="background:#fff; padding:14px 14px 14px 36px; border:1px solid #e2e2de; border-radius:6px; margin:0;">');
       for (const idea of agg.top_ideas) {
-        h.push(`<li style="margin:8px 0; line-height:1.5;">&ldquo;${escapeHtml(idea.excerpt)}&rdquo;${idea.werdykt ? `<br><span style="color:#4a4a4a; font-size:13px;">Werdykt: ${escapeHtml(idea.werdykt)}</span>` : ""}</li>`);
+        const modeBadge = `<span style="display:inline-block; padding:2px 8px; background:#F4EFE5; border:1px solid #e2e2de; border-radius:10px; font-size:11px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em; margin-right:6px;">${escapeHtml(idea.mode)}</span>`;
+        h.push(`<li style="margin:8px 0; line-height:1.5;">${modeBadge}&ldquo;${escapeHtml(idea.excerpt)}&rdquo;${idea.werdykt ? `<br><span style="color:#4a4a4a; font-size:13px;">Werdykt: ${escapeHtml(idea.werdykt)}</span>` : ""}</li>`);
       }
       h.push('</ol>');
     }
 
     h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Koszt szacunkowy</h3>');
     h.push('<table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e2e2de; border-radius:6px;">');
-    h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">Bedrock (sesje)</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right;">${formatCost(agg.cost.bedrock)}</td></tr>`);
+    h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">Bedrock mini</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right;">${formatCost(agg.cost.bedrock_mini)}</td></tr>`);
+    h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">Bedrock pelne</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right;">${formatCost(agg.cost.bedrock_full)}</td></tr>`);
+    h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">Bedrock razem</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${formatCost(agg.cost.bedrock)}</td></tr>`);
     h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">Infra (Lambda/DDB/CW/SES)</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right;">${formatCost(agg.cost.infra)}</td></tr>`);
     h.push(`<tr><td style="padding:8px 14px; font-weight:600;">RAZEM</td><td style="padding:8px 14px; text-align:right; font-weight:600; color:#1a2a4a;">${formatCost(agg.cost.total)}</td></tr>`);
     h.push('</table>');
@@ -307,14 +391,18 @@ exports.handler = async (event) => {
     total: agg.total_in_window,
     started: agg.started_in_window,
     finals: agg.finals,
+    mini: agg.mini,
+    full: agg.full,
     verdicts: agg.verdicts,
     red_flags_top: agg.top_red_flags,
-    cost_total: agg.cost.total
+    cost_total: agg.cost.total,
+    cost_mini: agg.cost.bedrock_mini,
+    cost_full: agg.cost.bedrock_full
   }));
 
   const subject = agg.total_in_window === 0
     ? `Walidator: 0 aktywnosci (${formatDatePl(now)})`
-    : `Walidator: ${agg.total_in_window} sesji, ${agg.finals} ukonczonych (${formatDatePl(now)})`;
+    : `Walidator: ${agg.total_in_window} sesji (mini ${agg.mini.total} / pelne ${agg.full.total}), ${agg.finals} ukonczonych (${formatDatePl(now)})`;
 
   const plain = renderPlainText(agg, since, now);
   const html = renderHtml(agg, since, now);

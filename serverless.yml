@@ -17,9 +17,12 @@ provider:
     BEDROCK_REGION: eu-central-1
     MAX_OUTPUT_TOKENS: "2500"
     MAX_OUTPUT_TOKENS_REPORT: "1900"
+    MAX_OUTPUT_TOKENS_REPORT_MINI: "900"
     PROMPT_PATH: prompts/walidator-v2.md
+    PROMPT_PATH_MINI: prompts/walidator-mini.md
     SESSIONS_TABLE: walidator-sessions-${self:provider.stage}
     MAX_TURNS: "25"
+    MAX_TURNS_MINI: "5"
     PROMPT_CACHE_ENABLED: "true"
     ENABLE_AUTO_SHUTDOWN: "false"
   iam:
@@ -62,11 +65,12 @@ package:
 functions:
   walidator:
     handler: src/handler.handler
-    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock) z promptem v2.0. /walidator (one-shot) + /walidator/turn (25 pytan z sesja w DynamoDB).
+    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock). /walidator (one-shot) + /walidator/turn (5 pytan mini lub 25 pytan full, sesja w DynamoDB).
     package:
       patterns:
         - "src/handler.js"
         - "src/prompts/walidator-v2.md"
+        - "src/prompts/walidator-mini.md"
     events:
       - httpApi:
           path: /walidator
@@ -98,6 +102,8 @@ functions:
       LOOKBACK_HOURS: "24"
       COST_PER_FINAL_SESSION: "0.083"
       COST_PER_DIALOG_TURN: "0.0033"
+      COST_PER_FINAL_SESSION_MINI: "0.013"
+      COST_PER_DIALOG_TURN_MINI: "0.0007"
       COST_INFRA_DAILY: "0.0017"
     package:
       patterns:

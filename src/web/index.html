@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Walidator pomysłu - Artur Racicki</title>
-<meta name="description" content="Interaktywny walidator pomysłów biznesowych - rozmowa sokratejska wg metodologii Mom Test + CB Insights + 20 lat doświadczeń Artura Racickiego.">
+<meta name="description" content="Walidator pomysłów biznesowych - dwa tryby: szybka mini-walidacja (5 pytań, 5 min) lub pełna analiza (25 pytań). Konkretny raport z werdyktem.">
 <link rel="canonical" href="https://walidator.racicki.com/">
 <meta name="robots" content="noindex,follow">
 <meta property="og:title" content="Walidator pomysłu - Artur Racicki">
-<meta property="og:description" content="Rozmowa z AI w duchu Mom Test - 25 pytań i raport końcowy z werdyktem.">
+<meta property="og:description" content="Sprawdź swój pomysł w 5 lub 25 pytaniach. Raport końcowy z werdyktem i planem działania.">
 <meta property="og:url" content="https://walidator.racicki.com/">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="pl_PL">
@@ -37,15 +37,28 @@
   <section class="section section--hero">
     <div class="section__inner">
       <h1>Walidator pomysłu</h1>
-      <p class="lede">Rozmowa sokratejska o Twoim pomyśle biznesowym - do 25 pytań wg metodologii Mom Test, CB Insights i 20 lat doświadczeń. Na koniec dostajesz raport z werdyktem.</p>
+      <p class="lede">Sprawdź pomysł biznesowy w rozmowie z AI. Konkretny raport z werdyktem i planem działania.</p>
     </div>
   </section>
 
   <section class="section section--chat">
     <div class="section__inner chat">
+
+      <div class="mode-toggle" id="mode-toggle" role="radiogroup" aria-label="Wybierz tryb walidacji">
+        <button type="button" class="mode-toggle__btn is-active" id="mode-mini" role="radio" aria-checked="true" data-mode="mini">
+          <span class="mode-toggle__title">MINI</span>
+          <span class="mode-toggle__sub">5 pytań · 5 min</span>
+        </button>
+        <button type="button" class="mode-toggle__btn" id="mode-full" role="radio" aria-checked="false" data-mode="full">
+          <span class="mode-toggle__title">PEŁNA</span>
+          <span class="mode-toggle__sub">25 pytań · 25 min</span>
+        </button>
+      </div>
+      <p class="mode-toggle__desc muted" id="mode-desc">Szybka walidacja 5 kluczowych aspektów - idealna żeby sprawdzić pomysł w 5 minut.</p>
+
       <div class="chat__header" id="chat-header">
         <div class="chat__progress" aria-live="polite">
-          <span id="turn-counter" class="chat__counter">Tura 0 z 25</span>
+          <span id="turn-counter" class="chat__counter">Tura 0 z 5</span>
           <div class="chat__bar" aria-hidden="true"><div id="turn-bar" class="chat__bar-fill" style="width:0%"></div></div>
         </div>
         <button type="button" id="reset-btn" class="chat__reset" hidden>Zacznij od nowa</button>
@@ -54,6 +67,13 @@
       <div id="messages" class="chat__messages" aria-live="polite" aria-atomic="false"></div>
 
       <div id="verdict-box" class="chat__verdict" hidden></div>
+
+      <div id="upgrade-cta" class="chat__upgrade" hidden>
+        <div class="chat__upgrade-text">
+          Chcesz pójść głębiej? Pełna walidacja zadaje 25 pytań i pokazuje co naprawdę decyduje o sukcesie pomysłu.
+        </div>
+        <button type="button" id="upgrade-btn" class="chat__upgrade-btn">Przejdź do pełnej walidacji 25 pytań →</button>
+      </div>
 
       <form id="chat-form" class="chat__form" novalidate>
         <label for="message" class="chat__label">Twoja odpowiedź</label>

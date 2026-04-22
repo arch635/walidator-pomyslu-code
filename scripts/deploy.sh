@@ -27,17 +27,24 @@ echo "   ✓ OK"
 STAGE="${STAGE:-prod}"
 STACK_NAME="walidator-pomyslu-${STAGE}"
 
-# Prompt źródłowy żyje w docs (../walidator-pomyslu/), kopiujemy do src/prompts/
-# żeby Lambda miała go w swoim bundle. Tylko tu jest single source of truth.
-PROMPT_SRC="${ROOT_DIR}/../walidator-pomyslu/walidator-v2-prompt.md"
-PROMPT_DST="${ROOT_DIR}/src/prompts/walidator-v2.md"
-echo "▶ Synchronizuję prompt v2.0 z docs -> src/prompts/..."
-if [ ! -f "$PROMPT_SRC" ]; then
-  echo "   ✖ STOP: nie znajduję $PROMPT_SRC"; exit 1
-fi
+# Prompty źródłowe żyją w docs (../walidator-pomyslu/), kopiujemy do src/prompts/
+# żeby Lambda miała je w swoim bundle. Single source of truth = docs.
+PROMPT_FULL_SRC="${ROOT_DIR}/../walidator-pomyslu/walidator-v2-prompt.md"
+PROMPT_FULL_DST="${ROOT_DIR}/src/prompts/walidator-v2.md"
+PROMPT_MINI_SRC="${ROOT_DIR}/../walidator-pomyslu/walidator-mini-prompt.md"
+PROMPT_MINI_DST="${ROOT_DIR}/src/prompts/walidator-mini.md"
+
+echo "▶ Synchronizuję prompty (full v2 + mini) z docs -> src/prompts/..."
 mkdir -p "${ROOT_DIR}/src/prompts"
-cp "$PROMPT_SRC" "$PROMPT_DST"
-echo "   ✓ $(wc -l < "$PROMPT_DST") linii"
+for pair in "$PROMPT_FULL_SRC|$PROMPT_FULL_DST" "$PROMPT_MINI_SRC|$PROMPT_MINI_DST"; do
+  src="${pair%%|*}"
+  dst="${pair##*|}"
+  if [ ! -f "$src" ]; then
+    echo "   ✖ STOP: nie znajduję $src"; exit 1
+  fi
+  cp "$src" "$dst"
+  echo "   ✓ $(basename "$dst"): $(wc -l < "$dst") linii"
+done
 
 echo "▶ Serverless deploy (stage=${STAGE}, region=${AWS_REGION})..."
 npx serverless deploy --stage "$STAGE" --region "$AWS_REGION"
