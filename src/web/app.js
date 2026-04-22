@@ -13,17 +13,38 @@
   const submitBtn = document.getElementById("submit-btn");
   const resultBox = document.getElementById("result");
 
-  function setResult(kind, title, body) {
-    resultBox.className = "result" + (kind === "error" ? " result--error" : kind === "success" ? " result--success" : "");
-    resultBox.innerHTML = "";
-    const h = document.createElement("h3");
-    h.textContent = title;
-    resultBox.appendChild(h);
-    const p = document.createElement("p");
-    p.textContent = body;
-    resultBox.appendChild(p);
+  function setHtml(kind, html) {
+    resultBox.className = "result" + (kind === "error" ? " result--error" : kind === "loading" ? " result--loading" : " result--success");
+    resultBox.innerHTML = html;
     resultBox.hidden = false;
     resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function setMessage(kind, title, body) {
+    const safeTitle = escapeHtml(title);
+    const safeBody = escapeHtml(body);
+    setHtml(kind, `<h3>${safeTitle}</h3><p>${safeBody}</p>`);
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderMarkdown(md) {
+    if (typeof window.marked === "undefined") {
+      return `<pre>${escapeHtml(md)}</pre>`;
+    }
+    try {
+      window.marked.setOptions({ gfm: true, breaks: false, headerIds: false, mangle: false });
+      return window.marked.parse(md);
+    } catch (e) {
+      return `<pre>${escapeHtml(md)}</pre>`;
+    }
   }
 
   function updateCount() {
@@ -37,14 +58,18 @@
     e.preventDefault();
     const pomysl = textarea.value.trim();
     if (!pomysl) {
-      setResult("error", "Brak treści", "Wpisz swój pomysł w 2-3 zdaniach, zanim klikniesz Sprawdź.");
+      setMessage("error", "Brak treści", "Wpisz swój pomysł w 2-3 zdaniach, zanim klikniesz Sprawdź.");
       return;
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = "Sprawdzam...";
-    resultBox.hidden = true;
+    submitBtn.textContent = "Analizuję...";
+    setHtml("loading",
+      '<h3>Analizuję Twój pomysł...</h3>' +
+      '<p class="muted">Claude (AWS Bedrock) czyta opis, sprawdza red flagi wg metodologii Mom Test + CB Insights i buduje raport. Zwykle 5-15 sekund.</p>'
+    );
 
+    const started = Date.now();
     try {
       const res = await fetch(API_ENDPOINT, {
         method: "POST",
@@ -52,14 +77,26 @@
         body: JSON.stringify({ pomysl })
       });
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        setResult("error", "Coś poszło nie tak", data.message || ("HTTP " + res.status));
-      } else {
-        setResult("success", "Twój pomysł został przyjęty",
-          data.message || "W kolejnym kroku dodamy Claude który przeanalizuje go wg metodologii Mom Test + CB Insights + 20 lat doświadczeń Artura.");
+        setMessage("error", "Coś poszło nie tak", data.message || ("HTTP " + res.status));
+        return;
       }
+      if (!data.markdown) {
+        setMessage("error", "Pusta odpowiedź", data.message || "Model nie zwrócił raportu. Spróbuj ponownie.");
+        return;
+      }
+
+      const elapsed = Math.round((Date.now() - started) / 100) / 10;
+      const in_t = data.usage && data.usage.input_tokens;
+      const out_t = data.usage && data.usage.output_tokens;
+      const meta = (in_t != null && out_t != null)
+        ? `<p class="muted result-meta">Analiza wygenerowana w ${elapsed}s · ${in_t} + ${out_t} tokenów (input + output).</p>`
+        : `<p class="muted result-meta">Analiza wygenerowana w ${elapsed}s.</p>`;
+
+      setHtml("success", `<div class="result-md">${renderMarkdown(data.markdown)}</div>${meta}`);
     } catch (err) {
-      setResult("error", "Błąd sieci", "Nie udało się skontaktować z API. Spróbuj ponownie za chwilę.");
+      setMessage("error", "Błąd sieci", "Nie udało się skontaktować z API. Spróbuj ponownie za chwilę.");
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Sprawdź pomysł";

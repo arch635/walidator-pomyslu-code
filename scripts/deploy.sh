@@ -27,6 +27,18 @@ echo "   ✓ OK"
 STAGE="${STAGE:-prod}"
 STACK_NAME="walidator-pomyslu-${STAGE}"
 
+# Prompt źródłowy żyje w docs (../walidator-pomyslu/), kopiujemy do src/prompts/
+# żeby Lambda miała go w swoim bundle. Tylko tu jest single source of truth.
+PROMPT_SRC="${ROOT_DIR}/../walidator-pomyslu/walidator-v2-prompt.md"
+PROMPT_DST="${ROOT_DIR}/src/prompts/walidator-v2.md"
+echo "▶ Synchronizuję prompt v2.0 z docs -> src/prompts/..."
+if [ ! -f "$PROMPT_SRC" ]; then
+  echo "   ✖ STOP: nie znajduję $PROMPT_SRC"; exit 1
+fi
+mkdir -p "${ROOT_DIR}/src/prompts"
+cp "$PROMPT_SRC" "$PROMPT_DST"
+echo "   ✓ $(wc -l < "$PROMPT_DST") linii"
+
 echo "▶ Serverless deploy (stage=${STAGE}, region=${AWS_REGION})..."
 npx serverless deploy --stage "$STAGE" --region "$AWS_REGION"
 

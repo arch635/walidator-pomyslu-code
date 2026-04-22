@@ -7,3 +7,6 @@ node_modules/
 
 # Wygenerowany frontend (app.js z wstrzyknietym API_ENDPOINT) - trzymamy w .build/
 .build/
+
+# Prompt v2.0 jest kopiowany z ../walidator-pomyslu/ przy deploy - nie commitujemy
+src/prompts/

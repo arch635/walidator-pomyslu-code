@@ -30,7 +30,11 @@ infra/config.sh             # IDki zasobów AWS (commitowane, to nie sekrety)
 
 ## Status
 
-- Krok 5 (MVP szkielet): **done**. Placeholder response, bez AI.
-- Krok 6 (Bedrock): todo.
+- Krok 5 (MVP szkielet): **done**. Placeholder response.
+- Krok 5b (domena + HTTPS): **done**. ACM cert, alias CloudFront.
+- Krok 5c (UI polish): **done**. Usunięte rozpraszacze z menu i sekcji tech.
+- Krok 6 (Bedrock Claude Haiku 4.5, tryb one-shot): **done**. Raport markdown
+  z 8 sekcjami, średnio 17s, $0.0166/walidacja.
+- Krok 7 (DynamoDB + tryb wieloetapowy 25 pytań): todo.
 
 Więcej w `../walidator-pomyslu/CHANGELOG.md`.
