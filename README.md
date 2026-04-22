@@ -35,6 +35,9 @@ infra/config.sh             # IDki zasobów AWS (commitowane, to nie sekrety)
 - Krok 5c (UI polish): **done**. Usunięte rozpraszacze z menu i sekcji tech.
 - Krok 6 (Bedrock Claude Haiku 4.5, tryb one-shot): **done**. Raport markdown
   z 8 sekcjami, średnio 17s, $0.0166/walidacja.
-- Krok 7 (DynamoDB + tryb wieloetapowy 25 pytań): todo.
+- Krok 7 (DynamoDB + tryb wieloetapowy + chat UX + prompt caching): **done**.
+  25 tur + raport finalny, cache ~82% input, ~$0.08/sesja. Endpoints:
+  `POST /walidator/turn`, `GET /walidator/session/{id}`.
+- Krok 8 (dzienny raport mailowy SES + EventBridge): todo.
 
 Więcej w `../walidator-pomyslu/CHANGELOG.md`.

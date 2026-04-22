@@ -16,7 +16,11 @@ provider:
     BEDROCK_MODEL_ID: eu.anthropic.claude-haiku-4-5-20251001-v1:0
     BEDROCK_REGION: eu-central-1
     MAX_OUTPUT_TOKENS: "2500"
+    MAX_OUTPUT_TOKENS_REPORT: "1900"
     PROMPT_PATH: prompts/walidator-v2.md
+    SESSIONS_TABLE: walidator-sessions-${self:provider.stage}
+    MAX_TURNS: "25"
+    PROMPT_CACHE_ENABLED: "true"
   iam:
     role:
       statements:
@@ -32,6 +36,16 @@ provider:
           Resource:
             - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-*"
             - "arn:aws:bedrock:*:502761806947:inference-profile/eu.anthropic.claude-haiku-4-5-*"
+            - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6-*"
+            - "arn:aws:bedrock:*:502761806947:inference-profile/eu.anthropic.claude-sonnet-4-6-*"
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - Fn::GetAtt: [SessionsTable, Arn]
 
 package:
   individually: true
@@ -43,7 +57,7 @@ package:
 functions:
   walidator:
     handler: src/handler.handler
-    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock) z promptem v2.0, tryb one-shot (krok 6).
+    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock) z promptem v2.0. /walidator (one-shot) + /walidator/turn (25 pytan z sesja w DynamoDB).
     events:
       - httpApi:
           path: /walidator
@@ -51,14 +65,47 @@ functions:
       - httpApi:
           path: /walidator
           method: options
+      - httpApi:
+          path: /walidator/turn
+          method: post
+      - httpApi:
+          path: /walidator/turn
+          method: options
+      - httpApi:
+          path: /walidator/session/{id}
+          method: get
+      - httpApi:
+          path: /walidator/session/{id}
+          method: options
 
 custom:
-  # CORS dopuszczamy tylko produkcyjną subdomenę + tymczasowy CloudFront URL (dla testów
-  # przed ustawieniem DNS). Dodatkowy rekord aktualizujemy po utworzeniu CloudFront.
   corsOrigins:
     - https://walidator.racicki.com
 
 resources:
+  Resources:
+    SessionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: walidator-sessions-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: session_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: session_id
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: false
+        Tags:
+          - Key: project
+            Value: walidator-pomyslu
+          - Key: stage
+            Value: ${self:provider.stage}
+
   Outputs:
     HttpApiEndpoint:
       Description: Base URL API Gateway (httpApi)
@@ -70,3 +117,6 @@ resources:
             - ".execute-api."
             - ${self:provider.region}
             - ".amazonaws.com"
+    SessionsTableName:
+      Description: DynamoDB sessions table
+      Value: !Ref SessionsTable

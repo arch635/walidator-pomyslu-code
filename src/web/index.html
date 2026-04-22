@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Walidator pomysłu - Artur Racicki</title>
-<meta name="description" content="Szybki walidator pomysłów biznesowych wg metodologii Mom Test + CB Insights. Opisz pomysł w 2-3 zdaniach, dostaniesz analizę.">
+<meta name="description" content="Interaktywny walidator pomysłów biznesowych - rozmowa sokratejska wg metodologii Mom Test + CB Insights + 20 lat doświadczeń Artura Racickiego.">
 <link rel="canonical" href="https://walidator.racicki.com/">
 <meta name="robots" content="noindex,follow">
 <meta property="og:title" content="Walidator pomysłu - Artur Racicki">
-<meta property="og:description" content="Opisz pomysł w 2-3 zdaniach, dostaniesz szybką analizę.">
+<meta property="og:description" content="Rozmowa z AI w duchu Mom Test - 25 pytań i raport końcowy z werdyktem.">
 <meta property="og:url" content="https://walidator.racicki.com/">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="pl_PL">
@@ -37,29 +37,44 @@
   <section class="section section--hero">
     <div class="section__inner">
       <h1>Walidator pomysłu</h1>
-      <p class="lede">Opisz swój pomysł biznesowy w 2-3 zdaniach. W kolejnym kroku zbudujemy analizę w oparciu o metodologię Mom Test, dane CB Insights i 20 lat doświadczeń w przedsiębiorczości.</p>
-      <p class="muted">Wersja MVP - szkielet. Analizę AI dodajemy w następnym kroku.</p>
+      <p class="lede">Rozmowa sokratejska o Twoim pomyśle biznesowym - do 25 pytań wg metodologii Mom Test, CB Insights i 20 lat doświadczeń. Na koniec dostajesz raport z werdyktem.</p>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section__inner">
-      <form id="walidator-form" novalidate>
-        <label for="pomysl">Twój pomysł</label>
-        <textarea id="pomysl" name="pomysl" rows="6" maxlength="2000"
-          placeholder="Np. Aplikacja, która pomaga młodym przedsiębiorcom walidować pomysły przez serię pytań Mom Test, zanim zaczną kodować."
-          required></textarea>
-        <div class="form-meta">
-          <span id="count" class="muted">0 / 2000 znaków</span>
+  <section class="section section--chat">
+    <div class="section__inner chat">
+      <div class="chat__header" id="chat-header">
+        <div class="chat__progress" aria-live="polite">
+          <span id="turn-counter" class="chat__counter">Tura 0 z 25</span>
+          <div class="chat__bar" aria-hidden="true"><div id="turn-bar" class="chat__bar-fill" style="width:0%"></div></div>
         </div>
-        <button type="submit" id="submit-btn">Sprawdź pomysł</button>
+        <button type="button" id="reset-btn" class="chat__reset" hidden>Zacznij od nowa</button>
+      </div>
+
+      <div id="messages" class="chat__messages" aria-live="polite" aria-atomic="false"></div>
+
+      <div id="verdict-box" class="chat__verdict" hidden></div>
+
+      <form id="chat-form" class="chat__form" novalidate>
+        <label for="message" class="chat__label">Twoja odpowiedź</label>
+        <textarea id="message" name="message" rows="3" maxlength="2000"
+          placeholder="Opisz swój pomysł w 2-3 zdaniach - np. kto ma problem, jaki i jak to rozwiązujesz."
+          required></textarea>
+        <div class="chat__meta">
+          <span id="count" class="muted">0 / 2000 znaków</span>
+          <button type="submit" id="send-btn">Wyślij</button>
+        </div>
       </form>
 
-      <div id="result" class="result" hidden aria-live="polite"></div>
+      <p id="error-box" class="chat__error" hidden></p>
+
+      <p class="chat__hint muted">
+        Tip: piszesz krótko i konkretnie. Żadnych ogólników - podaj liczby, imiona, daty. Sesja utrzymuje się w tej przeglądarce.
+      </p>
     </div>
   </section>
 
-  </main>
+</main>
 
 <footer class="site-footer">
   <div class="site-footer__inner">
