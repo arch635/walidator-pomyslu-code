@@ -42,6 +42,11 @@ infra/config.sh             # IDki zasobów AWS (commitowane, to nie sekrety)
   Lambda `walidatorDailyReport` + Scheduler `walidator-daily-report-prod`
   (cron 8:00 Europe/Warsaw). SES sandbox wystarczy, identity pending aż
   Artur kliknie link weryfikacyjny.
-- Krok 9 (budget alarm $25 + CloudWatch alarmy): todo.
+- Krok 9 (budget $10 + Cost Anomaly + SNS + 5 CloudWatch alarmów): **done**.
+  Budżet zostaje na $10/mo (Artur potwierdził). SNS topic
+  `alerts-walidator-prod`, alarmy: lambda-errors, daily-report-errors,
+  lambda-duration-p99, ddb-throttles, daily-report-missed. Flaga
+  `ENABLE_AUTO_SHUTDOWN=false` gotowa w env obu Lambd.
+- Krok 10 (finalna mapa + diagram ARCHITECTURE.md): todo.
 
 Więcej w `../walidator-pomyslu/CHANGELOG.md`.
