@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true" role="presentation">
+  <circle cx="23" cy="45" r="1.5" fill="#fff" opacity="0.6"/>
+  <circle cx="72" cy="28" r="1" fill="#fff" opacity="0.4"/>
+  <circle cx="108" cy="70" r="2" fill="#fff" opacity="0.5"/>
+  <circle cx="145" cy="35" r="1" fill="#fff" opacity="0.3"/>
+  <circle cx="180" cy="95" r="1.5" fill="#fff" opacity="0.55"/>
+  <circle cx="210" cy="50" r="1" fill="#fff" opacity="0.35"/>
+  <circle cx="245" cy="128" r="2.5" fill="#fff" opacity="0.65"/>
+  <circle cx="280" cy="22" r="1" fill="#fff" opacity="0.3"/>
+  <circle cx="315" cy="65" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="350" cy="88" r="1" fill="#fff" opacity="0.4"/>
+  <circle cx="380" cy="125" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="45" cy="110" r="1" fill="#fff" opacity="0.35"/>
+  <circle cx="95" cy="155" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="125" cy="175" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="165" cy="145" r="1" fill="#fff" opacity="0.3"/>
+  <circle cx="205" cy="180" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="255" cy="165" r="1" fill="#fff" opacity="0.35"/>
+  <circle cx="295" cy="145" r="2" fill="#fff" opacity="0.55"/>
+  <circle cx="335" cy="180" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="375" cy="160" r="1" fill="#fff" opacity="0.4"/>
+</svg>

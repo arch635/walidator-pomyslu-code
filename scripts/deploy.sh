@@ -59,6 +59,7 @@ rm -rf .build
 mkdir -p .build
 cp src/web/index.html .build/index.html
 cp src/web/styles.css .build/styles.css
+cp src/web/stars.svg .build/stars.svg
 sed "s|__API_ENDPOINT__|${API_ENDPOINT}|g" src/web/app.js > .build/app.js
 
 if [ -z "${BUCKET_PROD:-}" ]; then
@@ -78,6 +79,9 @@ aws s3 cp .build/styles.css "s3://${BUCKET_PROD}/styles.css" \
   --metadata-directive REPLACE --no-progress > /dev/null
 aws s3 cp .build/app.js "s3://${BUCKET_PROD}/app.js" \
   --content-type "application/javascript; charset=utf-8" \
+  --metadata-directive REPLACE --no-progress > /dev/null
+aws s3 cp .build/stars.svg "s3://${BUCKET_PROD}/stars.svg" \
+  --content-type "image/svg+xml" \
   --metadata-directive REPLACE --no-progress > /dev/null
 echo "   ✓ Sync OK"
 

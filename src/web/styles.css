@@ -1,12 +1,15 @@
 /* walidator.racicki.com - spójny ze stylem racicki.com (James Clear minimalizm) */
 
 :root {
-  --bg: #fafaf7;
-  --text: #111;
-  --text-muted: #4a4a4a;
+  --bg: #FAF7F2;
+  --bg-cosmic: #0F1729;
+  --text: #0F1729;
+  --text-muted: #5A5A52;
+  --text-on-cosmic: #E8E6E1;
   --accent: #2D8659;
-  --accent-hover: #236b47;
-  --border: #e2e2de;
+  --accent-hover: #236B47;
+  --star: #E4B24A;
+  --border: #E2DED6;
   --placeholder-bg: #eeeeea;
   --placeholder-border: #cfcfc9;
   --error: #9b2c2c;
@@ -31,18 +34,23 @@ body {
 
 h1, h2, h3 {
   font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--text);
   margin-top: 0;
 }
-h1 { font-size: 2.25rem; line-height: 1.15; margin-bottom: 1rem; }
-h2 { font-size: 1.75rem; line-height: 1.2; margin: 2.5rem 0 1rem; }
-h3 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 .75rem; font-weight: 600; }
+h1 {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 600;
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+h2 { font-size: 1.75rem; font-weight: 600; line-height: 1.2; margin: 2.5rem 0 1rem; }
+h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.3; margin: 2rem 0 .75rem; }
 @media (min-width: 720px) {
-  h1 { font-size: 3rem; }
   h2 { font-size: 2.25rem; }
 }
+
+ul li::marker { color: var(--star); }
 
 p { margin: 0 0 1.1em; }
 a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -53,10 +61,10 @@ a:hover { color: var(--accent-hover); }
 ul { padding-left: 1.2em; }
 li { margin-bottom: .4em; }
 
-/* Nawigacja */
+/* Nawigacja - kosmiczne tło z gwiazdami */
 .site-nav {
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-cosmic) url('/stars.svg') center / 400px 200px repeat;
+  border-bottom: 1px solid rgba(232, 230, 225, 0.08);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -75,10 +83,11 @@ li { margin-bottom: .4em; }
   font-family: 'Fraunces', Georgia, serif;
   font-weight: 600;
   font-size: 1.15rem;
-  color: var(--text);
+  color: var(--text-on-cosmic);
   text-decoration: none;
   letter-spacing: -0.01em;
 }
+.site-nav__logo:hover { color: var(--star); }
 .site-nav__menu {
   display: flex;
   flex-wrap: wrap;
@@ -89,18 +98,19 @@ li { margin-bottom: .4em; }
   align-items: center;
 }
 .site-nav__menu a {
-  color: var(--text);
+  color: var(--text-on-cosmic);
   text-decoration: none;
   font-size: 0.95rem;
+  transition: color 0.15s ease;
 }
-.site-nav__menu a:hover { color: var(--accent); }
+.site-nav__menu a:hover { color: var(--star); }
 .site-nav__menu .nav-home {
   display: inline-flex;
   align-items: center;
-  color: var(--text);
+  color: var(--text-on-cosmic);
   padding: 2px 0;
 }
-.site-nav__menu .nav-home:hover { color: var(--accent); }
+.site-nav__menu .nav-home:hover { color: var(--star); }
 .site-nav__menu .nav-home svg { display: block; }
 
 /* Sekcje */
@@ -116,7 +126,7 @@ main { display: block; }
 }
 .section--hero {
   padding: 4rem 1.25rem 2rem;
-  background: linear-gradient(180deg, #f0efea 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #F0ECE3 0%, var(--bg) 100%);
 }
 @media (min-width: 720px) {
   .section { padding: 4rem 1.5rem; }
@@ -174,7 +184,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   margin-top: 2rem;
   padding: 1.5rem;
   border-radius: 6px;
-  background: #f5f4ef;
+  background: #F4EFE5;
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
 }
@@ -266,7 +276,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .chat__bar-fill {
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
   transition: width 0.3s ease;
 }
 .chat__reset {
@@ -313,18 +323,18 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .msg--user { align-items: flex-end; }
 .msg--user .msg__body {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: rgba(228, 178, 74, 0.15);
+  color: var(--text);
+  border-color: rgba(228, 178, 74, 0.35);
   max-width: 85%;
 }
 .msg--assistant .msg__body {
-  background: #f5f4ef;
+  background: #F4EFE5;
   max-width: 100%;
 }
-.msg--loading .msg__body { background: #f5f4ef; color: var(--text-muted); }
+.msg--loading .msg__body { background: #F4EFE5; color: var(--text-muted); }
 .msg--final .msg__body {
-  border-left: 4px solid var(--success);
+  border-left: 3px solid var(--accent);
   background: #fff;
 }
 
@@ -433,7 +443,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   box-shadow: 0 0 0 3px rgba(45, 134, 89, 0.15);
 }
 .chat__form textarea:disabled {
-  background: #f5f4ef;
+  background: #F4EFE5;
   cursor: not-allowed;
 }
 .chat__meta {
@@ -470,16 +480,23 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .chat__hint { margin: 0; font-size: 0.85rem; }
 
-/* Stopka */
+/* Stopka - kosmiczne tło z gwiazdami */
 .site-footer {
-  background: #f0efea;
-  padding: 2rem 1.25rem;
+  background: var(--bg-cosmic) url('/stars.svg') center / 400px 200px repeat;
+  padding: 2.5rem 1.25rem;
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--text-on-cosmic);
 }
 .site-footer__inner {
   max-width: var(--measure);
   margin: 0 auto;
   text-align: center;
 }
-.site-footer a { color: var(--text); }
+.site-footer a {
+  color: var(--text-on-cosmic);
+  text-decoration-color: rgba(232, 230, 225, 0.4);
+}
+.site-footer a:hover {
+  color: var(--star);
+  text-decoration-color: var(--star);
+}
