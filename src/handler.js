@@ -678,6 +678,15 @@ async function handleTurn(event, origin) {
   const sanitized = sanitizeReport(cleanText);
   cleanText = sanitized.text;
 
+  // Etap 4 fallback: raport finalny MUSI zawierać stopkę racicki.com.
+  // Claude w testach ignoruje regułę z promptu; backend gwarantuje stopkę.
+  let footerInjected = false;
+  if (isFinal && !/racicki\.com/i.test(cleanText)) {
+    cleanText = cleanText.trimEnd() +
+      "\n\n---\nWalidator korzysta z doświadczeń Artura Racickiego. Pełne bio i kontakt: racicki.com\n";
+    footerInjected = true;
+  }
+
   session.turns.push({ role: "assistant", content: cleanText, ts: nowIso() });
   touchSession(session);
   if (isFinal) {
@@ -712,6 +721,7 @@ async function handleTurn(event, origin) {
     // Etap 4: sanitize banned terms. >0 = Claude wymyślił firmę/datę Artura.
     banned_terms_detected: sanitized.detected,
     banned_terms_matched: sanitized.matched,
+    footer_injected: footerInjected,
     is_final: isFinal,
     forced_final: forceFinal,
     forced_topic_close: forceTopicClose,
