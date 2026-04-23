@@ -213,7 +213,7 @@
 
   function setPlaceholder() {
     if (isFinal) return;
-    if (userTurnCount === 0) {
+    if (topicsCoveredCount === 0 && !sessionId) {
       textarea.placeholder = "Opisz swój pomysł w 2-3 zdaniach - np. kto ma problem, jaki i jak to rozwiązujesz.";
     } else {
       textarea.placeholder = "Twoja odpowiedź (krótko, konkretnie - liczby, imiona, daty).";

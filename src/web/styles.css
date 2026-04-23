@@ -449,21 +449,29 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   gap: .4rem;
   flex: 1 1 auto;
   min-width: 220px;
+  border: 0;
+  outline: 0;
 }
 .chat__counter {
   font-size: .9rem;
   color: var(--text-muted);
   font-weight: 500;
+  border: 0;
+  outline: 0;
 }
 .chat__bar {
   height: 6px;
   background: var(--border);
+  border: 0;
   border-radius: 3px;
+  outline: 0;
   overflow: hidden;
 }
 .chat__bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border: 0;
+  outline: 0;
   transition: width 0.3s ease;
 }
 .chat__reset {
@@ -483,8 +491,10 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-height: 120px;
 }
+/* min-height tylko gdy są już wiadomości - zero na starcie żeby nie generować
+   pustej przestrzeni między nagłówkiem a formularzem. */
+.chat__messages:not(:empty) { min-height: 120px; }
 
 .msg {
   max-width: 100%;
