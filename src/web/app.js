@@ -33,6 +33,7 @@
   const modeDesc = document.getElementById("mode-desc");
   const modeMiniBtn = document.getElementById("mode-mini");
   const modeFullBtn = document.getElementById("mode-full");
+  const infoBox = document.getElementById("info-box");
   const feedbackForm = document.getElementById("feedback-form");
   const feedbackSubmit = document.getElementById("feedback-submit");
   const feedbackError = document.getElementById("feedback-error");
@@ -124,11 +125,13 @@
   function hideToggle() {
     if (modeToggle) modeToggle.hidden = true;
     if (modeDesc) modeDesc.hidden = true;
+    if (infoBox) infoBox.hidden = true;
   }
 
   function showToggle() {
     if (modeToggle) modeToggle.hidden = false;
     if (modeDesc) modeDesc.hidden = false;
+    if (infoBox) infoBox.hidden = false;
   }
 
   function showFeedbackForm(show) {
