@@ -40,15 +40,23 @@ echo "=========================================="
 MINI_ANSWERS=(
   "Maszyna vendingowa z żywnością funkcjonalną dla biur w Warszawie i Krakowie. Przekąski z witaminami, proteinami, ziołami adaptogennymi. Klient to firma 50-500 osób z biurem w centrum."
   "Rozmawiałem z 12 osobami w ostatnich 3 miesiącach. Anna Kowalska (HR Manager w Getin Banku) powiedziała: 'Pracownicy narzekają że nie ma zdrowych opcji poza słodyczami i chipsami'. Jeszcze 5 HR managerów potwierdziło podobny feedback."
-  "Konkurenci: Healthy Box (gotowe boxy, $15/miesiąc), Pure Food Vending (maszyny ale tylko napoje), Fresh & Co (catering biurowy). My wygramy: 1) maszyna = niższy koszt operacyjny niż catering; 2) kuratorzy dietetyka; 3) unikalne SKU (adaptogeny)."
+  "Konkurenci: Healthy Box (gotowe boxy, 15 USD/miesiąc), Pure Food Vending (maszyny ale tylko napoje), Fresh & Co (catering biurowy). My wygramy: 1) maszyna = niższy koszt operacyjny niż catering; 2) kuratorzy dietetyka; 3) unikalne SKU (adaptogeny)."
   "Zmiany ostatnich 12-24 miesięcy: 1) post-COVID wzrost świadomości zdrowia (46% więcej wyszukiwań 'supergreens' w Google Trends Poland 2024); 2) regulacja UE 2023/915 o składnikach funkcjonalnych znosi bariery; 3) Gen Z w biurach (2024) oczekuje zdrowej oferty."
   "Największe ryzyko: logistyka refilli i psucie się produktów z krótkim terminem przydatności. Bez sprawnej flotowej logistyki z 2-dniową rotacją - straty marży. Plan mitygacji: partner z firmą Fresh Logistics (kontakt potwierdzony z Tomkiem Wójcikiem)."
+  "Drugie ryzyko: adopcja w firmach - jeśli HR przekonany ale pracownicy nie korzystają (zostaną przy chipsach), retention spadnie. Mitygacja: pilot 30-dniowy z dietetykiem i analizą transakcji co tydzień."
+  "Trzecie: reakcja konkurencji - duzi (Pure Food Vending) mogą wprowadzić funkcjonalne SKU. Mitygacja: umowy ekskluzywne na 12 msc z 5 top biurami w Q2."
+  "To wszystko co mam na dzisiaj. Proszę o raport."
 )
 
 SESSION_ID=""
-for i in "${!MINI_ANSWERS[@]}"; do
+MAX_LOOP=12
+for ((i=0; i<MAX_LOOP; i++)); do
   TURN_NUM=$((i + 1))
-  ANSWER="${MINI_ANSWERS[$i]}"
+  if [ $i -lt ${#MINI_ANSWERS[@]} ]; then
+    ANSWER="${MINI_ANSWERS[i]}"
+  else
+    ANSWER="Rozumiem. Nie mam więcej do dodania - przejdź do raportu."
+  fi
   echo ""
   echo "--- Tura $TURN_NUM ---"
   echo "User: ${ANSWER:0:80}..."
@@ -100,12 +108,18 @@ VAGUE_ANSWERS=(
   "Jest trochę konkurencji, ale my będziemy lepsi."
   "Wiele rzeczy się zmieniło w ostatnich latach."
   "Nie wiem jakie ryzyko. Chyba egzekucja."
+  "Nie wiem, nie zastanawiałem się szczegółowo."
+  "Nie mam więcej. Wygeneruj raport."
 )
 
 SESSION_ID=""
-for i in "${!VAGUE_ANSWERS[@]}"; do
+for ((i=0; i<MAX_LOOP; i++)); do
   TURN_NUM=$((i + 1))
-  ANSWER="${VAGUE_ANSWERS[$i]}"
+  if [ $i -lt ${#VAGUE_ANSWERS[@]} ]; then
+    ANSWER="${VAGUE_ANSWERS[i]}"
+  else
+    ANSWER="Nie wiem. Dalej."
+  fi
   echo ""
   echo "--- Tura $TURN_NUM (vague) ---"
   echo "User: $ANSWER"
