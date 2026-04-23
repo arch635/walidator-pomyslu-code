@@ -96,50 +96,77 @@ const MULTI_TURN_OVERRIDE = `
 
 ---
 
-# TRYB WIELOETAPOWY (krok 7 - 25 pytań z sesją w DynamoDB)
+# TRYB WIELOETAPOWY (25 TEMATÓW z sesją w DynamoDB)
 
-Prowadzisz rzeczywistą rozmowę wieloetapową (sokratejską) zgodnie z sekcją "STRUKTURA ROZMOWY" v2.0. Backend przechowuje historię, Ty dostajesz pełen kontekst każdej tury.
+Prowadzisz rzeczywistą rozmowę wieloetapową wokół **25 tematów** (nie 25 tur). Backend przechowuje historię i stan tematów, Ty dostajesz pełen kontekst każdej tury.
 
-## Jak odpowiadać w trakcie rozmowy (tura 1 do ~24)
+## OBOWIĄZKOWE TAGI METADANYCH (każda Twoja odpowiedź)
+
+Każda Twoja odpowiedź MUSI zaczynać się od tagów w osobnych liniach:
+- \`<topic>KOD</topic>\` - temat bieżącego pytania (jeden z 25 kodów z sekcji "STRUKTURA ROZMOWY" promptu głównego)
+- \`<topic_quality>KOD:concrete|vague</topic_quality>\` - dodaj tylko gdy user właśnie domknął poprzedni temat (oceń jakość jego odpowiedzi)
+
+Lambda usuwa tagi przed pokazaniem userowi. Bez tagów backend nie wie kiedy zamknąć temat.
+
+25 kodów (zachowaj dokładną kolejność z tabeli w prompcie głównym):
+idea_description, idea_uniqueness, problem_description, problem_cost, problem_conversations, problem_quote, problem_alternatives, customer_icp, customer_location, customer_attempts, customer_paying, customer_pipeline, competition_list, competition_advantage, market_size, market_timing, revenue_model, cac_ltv, current_spending, runway, team_composition, team_experience, sales_owner, biggest_risk, first_10_customers.
+
+## LIMIT follow-up per temat
+
+**Max 1 follow-up per temat.** Po 1 follow-upie MUSISZ zamknąć temat (tag topic_quality) i przejść do kolejnego, nawet jeśli user nadal unika konkretu → wtedy zamykasz jako \`vague\`.
+
+Backend wymusza to - jeśli Twoja następna odpowiedź dostanie w user message sygnał \`[WYMUSZONE_ZAMKNIĘCIE temat=X, przejdź do Y]\`, MUSISZ zamknąć X jako vague i rozpocząć Y.
+
+## ZAKAZ SUGEROWANIA ODPOWIEDZI
+
+Nigdy nie podawaj opcji/listy/przykładów w pytaniach. Pytaj o wymiary (branża/wielkość/miasto), nie podsuwaj kategorii. Szczegóły w prompcie głównym (sekcja "ZAKAZ SUGEROWANIA ODPOWIEDZI").
+
+## Jak odpowiadać w trakcie rozmowy
 
 - **Jedno pytanie na raz.** Krótkie (1-3 zdania). Po polsku.
-- **Bez numerowania** ("Pytanie 5/25:"). Bez nazw etapów ("## ETAP 2: KLIENT"). Bez preambuły ("Świetnie, zapytam teraz o..."). Tylko samo pytanie.
-- **Pierwsza wiadomość użytkownika** to już opis pomysłu (odpowiedź na Pytanie 1 v2.0) - nie pytaj o opis ponownie. Od razu przechodzisz do Pytania 2 (konkretny dowód problemu).
-- Jeśli odpowiedź jest ogólna ("wiele", "często", "mógłbym") - **dogłębiasz** pytanie zanim przejdziesz dalej: "Rozumiem. Ale potrzebuję konkretu: ..."
-- Idź w kolejności etapów v2.0 (Problem → Klient → Konkurencja → Ekonomia → Zespół → Timing), ale elastycznie: jeśli odpowiedź otwiera wątek z innego etapu, możesz pogłębiać.
-- Śledź red flagi w tle - **nie komentuj ich w trakcie**, zbierasz do raportu końcowego.
-- **Nie dawaj feedbacku w trakcie** ("To dobra odpowiedź", "To jest red flaga"). Tylko pytaj.
+- **Bez numerowania** ("Pytanie 5/25:"). Bez nazw etapów. Bez preambuły ("Świetnie, teraz zapytam..."). Tylko samo pytanie.
+- **Pierwsza wiadomość użytkownika** to już opis pomysłu (odpowiedź na idea_description) - nie pytaj o opis ponownie. Zamknij idea_description (\`<topic_quality>idea_description:...\`) i przechodź do idea_uniqueness lub problem_description (zależnie od jakości odpowiedzi).
+- Nie dawaj feedbacku w trakcie ("To dobra odpowiedź"). Tylko pytaj.
 
-## Kiedy generować RAPORT KOŃCOWY (zamiast kolejnego pytania)
+## Kiedy generować RAPORT KOŃCOWY
 
-Generuj raport finalny w dokładnie jednej z tych sytuacji:
-1. Otrzymasz od użytkownika wiadomość zawierającą dokładny ciąg **[WYGENERUJ RAPORT TERAZ]** (to sygnał z backendu że sesja osiągnęła limit 25 tur).
-2. Masz **co najmniej 18 odpowiedzi** użytkownika i uznajesz że zebrałeś wystarczająco danych (wszystkie 6 etapów v2.0 przynajmniej dotknięte).
+Generuj raport finalny TYLKO gdy spełniony jest jeden warunek:
+1. Otrzymasz w user message dokładny ciąg \`[WYGENERUJ RAPORT TERAZ]\` (to sygnał z backendu że wszystkie 25 tematów pokryte lub safety net).
 
-W przeciwnym razie - zadawaj pytanie.
+W przeciwnym razie - zadawaj pytanie (z tagami).
 
 ## Format raportu końcowego
 
-Dokładnie te sekcje w tej kolejności (**pierwsza linia musi być** \`## Pierwsza reakcja\` - backend używa tego jako sygnał że to raport, nie pytanie):
+Dokładnie te sekcje w tej kolejności (**pierwsza linia musi być** \`## Pierwsza reakcja\` - backend używa tego jako sygnał że to raport, nie pytanie). Ostatnie \`<topic_quality>\` zamykające ostatni temat ZAWSZE na samym początku, PRZED \`## Pierwsza reakcja\`.
 
 \`\`\`markdown
 ## Pierwsza reakcja
 [1-2 zdania - szczerze co myślisz o pomyśle po całej rozmowie]
 
 ## Co wiemy o tym pomyśle
-[3-5 bulletów z konkretami podanymi przez użytkownika: rozmowy z klientami, CAC/LTV, ICP, płacący early adopterzy, itd. Te konkrety które rzeczywiście padły w rozmowie.]
+[3-5 bulletów z konkretami podanymi przez użytkownika]
 
 ## Najważniejsze cytaty użytkownika
-[2-4 dosłowne cytaty z rozmowy - ich własne słowa opisujące problem, klientów, plany. Tylko konkretne wypowiedzi.]
+[2-4 dosłowne cytaty z rozmowy]
 
 ## Red flagi wykryte w rozmowie
-[Lista: **nazwa flagi pogrubiona** + 1-2 zdania uzasadnienia z odniesieniem do konkretnej odpowiedzi. Jeśli zero - napisz szczerze: "Brak krytycznych red flag - rozmowa pokazuje solidne fundamenty."]
+[Lista: **nazwa flagi pogrubiona** + 1-2 zdania uzasadnienia. Jeśli zero - "Brak krytycznych red flag - rozmowa pokazuje solidne fundamenty."]
 
 ## Flagi ostrzegawcze (żółte)
-[Lista punktów do poprawy przed startem, 2-5 bulletów. Jeśli zero - "Brak."]
+[2-5 bulletów. Jeśli zero - "Brak."]
 
 ## Potencjalne mocne strony
-[1-3 bullety oparte na konkretach z rozmowy]
+[1-3 bullety]
+
+## Dlaczego wynik mógł być lepszy
+**WSTAW TĘ SEKCJĘ TYLKO gdy co najmniej 2 tematy oznaczyłeś jako vague. Jeśli vague <= 1 - POMIŃ CAŁKOWICIE (sekcja NIE pojawia się).**
+
+Zauważyłem że w [lista 2+ tematów po polsku] odpowiedzi były ogólne. To ograniczyło precyzję walidacji.
+
+Gdy wrócisz z konkretami (liczby, imiona, cytaty, daty), raport będzie dokładniejszy.
+
+- [Temat X po polsku]: odpowiedź "[krótki cytat]", brakuje [co konkretnie]
+- [Temat Y po polsku]: odpowiedź "[krótki cytat]", brakuje [co konkretnie]
 
 ## 3 kroki na najbliższe 30 dni
 1. **Do 7 dni:** [konkretne działanie]
@@ -150,7 +177,7 @@ Dokładnie te sekcje w tej kolejności (**pierwsza linia musi być** \`## Pierws
 🟢/🟡/🟠/🔴 **[NAZWA POZIOMU]** + 1-2 zdania kluczowe.
 
 ## Polecana lektura
-1-3 pozycje dopasowane do słabych stron wykrytych **w rozmowie** (nie generycznie). Format: **Autor, "Tytuł"** - 1 zdanie dlaczego.
+1-3 pozycje. Format: **Autor, "Tytuł"** - 1 zdanie dlaczego.
 \`\`\`
 
 **Budżet raportu: maksymalnie 1800 tokenów. Bądź bezwzględnie zwięzły - lepiej raport skończyć niż rozciągnąć.** Każdy bullet max 15-20 słów. Cytaty max 1-2 zdania. Musisz zdążyć w 25s Lambdy - pilnuj długości, zakończ WERDYKTEM i LEKTURĄ nawet jeśli musisz skrócić wcześniejsze sekcje.
@@ -171,19 +198,35 @@ const MINI_TURN_OVERRIDE = `
 
 # WAŻNE: OBSŁUGA SESJI W BACKENDZIE (nadrzędne wobec sekcji START ROZMOWY)
 
-Backend przechowuje historię rozmowy w DynamoDB. **Pierwsza wiadomość użytkownika TO JUŻ jego odpowiedź na Pytanie 1** (opis pomysłu). NIE pytaj o opis ponownie - od razu zadaj Pytanie 2 (Klient).
+Backend przechowuje historię rozmowy w DynamoDB. **Pierwsza wiadomość użytkownika TO JUŻ jego odpowiedź na Temat 1 (idea)**. NIE pytaj o opis ponownie - zamknij idea (\`<topic_quality>idea:concrete|vague</topic_quality>\`) i od razu przechodź do tematu customer.
 
-Frontend pokazuje licznik "Tura X z 5" na górze - **NIE numeruj pytań w treści wiadomości** ("Pytanie 2/5:" pomiń). Tylko samo pytanie, krótko (1-3 zdania).
+## OBOWIĄZKOWE TAGI METADANYCH
 
-Jeśli odpowiedź jest ogólna (np. "z paroma osobami", "duży rynek") - dopytaj o konkret zanim przejdziesz dalej. Maksymalnie 1 follow-up per pytanie.
+Każda Twoja odpowiedź MUSI zaczynać się od tagów w osobnych liniach:
+- \`<topic>KOD</topic>\` - temat bieżącego pytania (jeden z: idea, customer, competition, timing, risk)
+- \`<topic_quality>KOD:concrete|vague</topic_quality>\` - dodaj tylko gdy user właśnie domknął poprzedni temat
 
-**Generuj RAPORT KOŃCOWY** gdy spełniony jest jeden warunek:
-1. Otrzymałeś co najmniej **5 odpowiedzi merytorycznych** użytkownika (po jednej na każde z 5 pytań), LUB
-2. Otrzymałeś sygnał \`[WYGENERUJ RAPORT TERAZ]\` w ostatniej wiadomości użytkownika.
+Lambda usuwa tagi przed pokazaniem userowi. Bez tagów backend nie wie kiedy zamknąć temat.
 
-**Pierwsza linia raportu MUSI brzmieć dokładnie**: \`# Twoja walidacja - szybki raport\` (backend wykrywa to jako sygnał końca sesji).
+## LIMIT follow-up per temat
 
-Format raportu zgodnie z sekcją "RAPORT KOŃCOWY" w prompcie głównym - zachowaj wszystkie sekcje (Werdykt z emoji 🟢/🟡/🟠/🔴, Co zauważyłem, 3 kroki na 14 dni, Następny krok). Budżet: maksymalnie 800 tokenów - bądź zwięzły, lepiej zakończyć WERDYKTEM niż rozciągnąć.
+Max 1 follow-up per temat. Po follow-upie MUSISZ zamknąć temat (tag topic_quality) i przejść do kolejnego. Backend wymusza: jeśli w user message pojawi się \`[WYMUSZONE_ZAMKNIĘCIE temat=X, przejdź do Y]\`, zamknij X jako vague i otwórz Y.
+
+## ZAKAZ SUGEROWANIA ODPOWIEDZI
+
+Nigdy nie podawaj opcji/listy/przykładów w pytaniach. Szczegóły w prompcie głównym.
+
+## Frontend
+
+Frontend pokazuje licznik "Temat X/5" na górze - **NIE numeruj pytań w treści wiadomości** ("Pytanie 2/5:" pomiń). Tylko samo pytanie, krótko (1-3 zdania).
+
+## KIEDY generować RAPORT KOŃCOWY
+
+Generuj raport TYLKO gdy w user message pojawi się dokładny sygnał \`[WYGENERUJ RAPORT TERAZ]\` (backend wysyła to gdy wszystkie 5 tematów pokryte lub safety net MAX_TURNS_MINI=12).
+
+**Pierwsza linia raportu MUSI brzmieć dokładnie**: \`# Twoja walidacja - szybki raport\` (backend wykrywa to jako sygnał końca sesji). Przed nią wstaw \`<topic_quality>\` zamykający ostatni temat.
+
+Format raportu zgodnie z sekcją "RAPORT KOŃCOWY" w prompcie głównym. Uwzględnij sekcję "Dlaczego wynik mógł być lepszy" WYŁĄCZNIE gdy >= 2 tematy były vague. Budżet: maksymalnie 800 tokenów.
 `;
 
 let BASE_PROMPT;
@@ -500,12 +543,16 @@ async function handleTurn(event, origin) {
     // Tryb sesji jest niezmienny - body.mode ignorowany przy kontynuacji.
     // Stare sesje (sprzed wprowadzenia mini) nie mają mode -> traktuj jak full.
     mode = session.mode || "full";
+    // Legacy sesje (sprzed topics) dostają puste domyślne pola, żeby reszta kodu
+    // miała jednolite API. Nowa logika działa od tego momentu wzwyż.
+    if (!Array.isArray(session.topics_covered)) session.topics_covered = [];
+    if (!session.topics_quality || typeof session.topics_quality !== "object") session.topics_quality = {};
+    if (typeof session.assistant_turns_in_current !== "number") session.assistant_turns_in_current = 0;
   } else {
     mode = normalizeMode(payload.mode);
     session = createSession(message, mode);
   }
 
-  // Sprawdź czy prompt dla danego mode się załadował (mini deploy mógł nie zadziałać).
   const systemText = systemForMode(mode);
   if (!systemText) {
     return json(500, { status: "error", message: "Brak skonfigurowanego promptu dla tego trybu." }, origin);
@@ -513,15 +560,34 @@ async function handleTurn(event, origin) {
 
   session.turns.push({ role: "user", content: message, ts: nowIso() });
 
-  const userTurns = countUserTurns(session);
+  const topics = topicsForMode(mode);
+  const covered = session.topics_covered.length;
+  const target = topics.length;
+  const nextTopic = nextTopicFor(session, mode);
+  const assistantTurns = countAssistantTurns(session);
   const maxTurnsThis = maxTurnsForMode(mode);
-  const forceFinal = userTurns >= maxTurnsThis;
 
+  // Decyzja o kontroli stanu: raport / wymuszone zamknięcie / idle hint
+  // - Główny warunek raportu: wszystkie tematy pokryte
+  // - Safety net: osiągnięty MAX_TURNS (ochrona przed pętlą Claude'a)
+  // - Wymuszone zamknięcie tematu: zbyt wiele tur w current_topic bez zamknięcia
+  const reachedTopics = covered >= target;
+  const reachedTurnsSafetyNet = assistantTurns >= maxTurnsThis;
+  const forceFinal = reachedTopics || reachedTurnsSafetyNet;
+  const forceTopicClose =
+    !forceFinal &&
+    session.current_topic &&
+    session.assistant_turns_in_current >= MAX_TURNS_PER_TOPIC;
+
+  // Klon messages dla Claude'a (modyfikujemy tylko ostatnią user message - nie DDB)
   const messages = session.turns.map((t) => ({ role: t.role, content: t.content }));
+  const last = messages[messages.length - 1];
+
   if (forceFinal) {
-    // Nudge the model towards final report by appending to the last user message.
-    const last = messages[messages.length - 1];
-    last.content = last.content + "\n\n[WYGENERUJ RAPORT TERAZ]";
+    const reason = reachedTopics ? "wszystkie tematy pokryte" : `limit tur ${maxTurnsThis}`;
+    last.content = last.content + `\n\n[WYGENERUJ RAPORT TERAZ - ${reason}. Pokryte: ${session.topics_covered.join(", ") || "(brak)"}. Vague: ${vagueTopicList(session).join(", ") || "(brak)"}.]`;
+  } else if (forceTopicClose) {
+    last.content = last.content + `\n\n[WYMUSZONE_ZAMKNIĘCIE temat=${session.current_topic}, przejdź do ${nextTopic || "(brak)"}. Zamknij jako vague w tagu topic_quality i otwórz nowy temat.]`;
   }
 
   const started = Date.now();
@@ -532,27 +598,46 @@ async function handleTurn(event, origin) {
   });
   const elapsed = Date.now() - started;
 
-  const isFinal = looksLikeFinalReport(text, mode);
+  // Parse tagi + strip z visible text, zanim zapiszemy do turns / pokażemy userowi
+  const parsed = parseTopicTags(text);
+  const applied = applyTopicMetadata(session, parsed, mode);
+  const cleanText = parsed.cleanText;
 
-  session.turns.push({ role: "assistant", content: text, ts: nowIso() });
+  const isFinal = looksLikeFinalReport(cleanText, mode);
+
+  session.turns.push({ role: "assistant", content: cleanText, ts: nowIso() });
   touchSession(session);
   if (isFinal) {
     session.is_final = true;
-    session.werdykt_koncowy = extractVerdict(text);
+    session.werdykt_koncowy = extractVerdict(cleanText);
+    // Jeśli Claude wygenerował raport ale nie zamknął jeszcze ostatniego tematu
+    // tagiem topic_quality - backend zamyka current_topic jako fallback (vague).
+    if (session.current_topic && !session.topics_covered.includes(session.current_topic)) {
+      session.topics_covered.push(session.current_topic);
+      session.topics_quality[session.current_topic] = session.topics_quality[session.current_topic] || "vague";
+    }
   }
 
   await saveSession(session);
 
   const turnNumber = countAssistantTurns(session);
+  const vagueCount = countVagueTopics(session);
 
   console.log(JSON.stringify({
     event: "turn_ok",
     session_id: session.session_id,
     mode,
-    user_turn: userTurns,
+    user_turn: countUserTurns(session),
     assistant_turn: turnNumber,
+    current_topic: session.current_topic,
+    topics_covered_count: session.topics_covered.length,
+    topics_total: target,
+    vague_count: vagueCount,
     is_final: isFinal,
     forced_final: forceFinal,
+    forced_topic_close: forceTopicClose,
+    applied_close: applied.closedTopic,
+    applied_new: applied.newTopic,
     elapsed_ms: elapsed,
     input_tokens: usage.input_tokens,
     output_tokens: usage.output_tokens,
@@ -565,11 +650,17 @@ async function handleTurn(event, origin) {
     status: "ok",
     session_id: session.session_id,
     mode,
+    // Dla kompatybilności z obecnym frontendem (zanim go zmienimy):
     turn_number: turnNumber,
     max_turns: maxTurnsThis,
-    user_turn_number: userTurns,
+    user_turn_number: countUserTurns(session),
+    // Nowe pola tematów:
+    topics_covered: session.topics_covered,
+    topics_total: target,
+    current_topic: session.current_topic,
+    vague_count: vagueCount,
     is_final: isFinal,
-    response: text,
+    response: cleanText,
     werdykt: session.werdykt_koncowy || null,
     usage: {
       input_tokens: usage.input_tokens,
@@ -589,6 +680,7 @@ async function handleGetSession(event, origin) {
   if (!session) return json(404, { status: "error", message: "Sesja nie istnieje." }, origin);
 
   const mode = session.mode || "full";
+  const topics = topicsForMode(mode);
   return json(200, {
     status: "ok",
     session_id: session.session_id,
@@ -599,7 +691,13 @@ async function handleGetSession(event, origin) {
     turns: session.turns,
     is_final: session.is_final,
     werdykt: session.werdykt_koncowy || null,
-    max_turns: maxTurnsForMode(mode)
+    max_turns: maxTurnsForMode(mode),
+    // Topics state (legacy sesje bez pól = puste)
+    topics_covered: Array.isArray(session.topics_covered) ? session.topics_covered : [],
+    topics_total: topics.length,
+    current_topic: session.current_topic || null,
+    vague_count: session.topics_quality ? Object.values(session.topics_quality).filter((q) => q === "vague").length : 0,
+    feedback: session.feedback || null
   }, origin);
 }
 
