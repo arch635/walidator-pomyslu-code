@@ -285,6 +285,24 @@ resources:
         OKActions:
           - Ref: AlertsTopic
 
+    # Warstwa C: metric filter na log "suggestions_cleaned" z handleTurn.
+    # Każdy turn_ok z suggestions_cleaned > 0 = Claude zasugerował mimo zakazu.
+    # Namespace "Walidator/Quality", metric "SuggestionsCleaned".
+    # Target: <5% tur (obecnie ~20%).
+    SuggestionsCleanedMetricFilter:
+      Type: AWS::Logs::MetricFilter
+      Properties:
+        LogGroupName:
+          Fn::Sub: "/aws/lambda/${WalidatorLambdaFunction}"
+        FilterName: walidator-${self:provider.stage}-suggestions-cleaned
+        FilterPattern: '{ $.event = "turn_ok" && $.suggestions_cleaned = * }'
+        MetricTransformations:
+          - MetricName: SuggestionsCleaned
+            MetricNamespace: Walidator/Quality
+            MetricValue: "$.suggestions_cleaned"
+            DefaultValue: 0
+            Unit: Count
+
     DailyReportMissedAlarm:
       Type: AWS::CloudWatch::Alarm
       Properties:

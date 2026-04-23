@@ -383,6 +383,26 @@ function countUserTurns(session) {
   return session.turns.filter((t) => t.role === "user").length;
 }
 
+// Post-processing: usuwa sugestie odpowiedzi które Claude czasem wrzuca mimo
+// reguły ZAKAZ SUGEROWANIA. Zwraca { text, cleaned } gdzie cleaned = liczba
+// trafień (dla CloudWatch metric "suggestions_cleaned_per_turn").
+// NIE dotyka raportu finalnego - w raporcie przykłady są DOZWOLONE (rekomendacje).
+function cleanSuggestions(text, isFinal) {
+  if (isFinal) return { text, cleaned: 0 };
+  let cleaned = 0;
+  // "(np. X, Y, Z)" - wariant z kropką i spacją
+  text = text.replace(/\(np\.\s[^)]+\)/gi, () => { cleaned++; return ""; });
+  // "(na przykład X)"
+  text = text.replace(/\(na przykład\s[^)]+\)/gi, () => { cleaned++; return ""; });
+  // Pytania retoryczne w nawiasach: minimum 2 znaki "?" w jednym nawiasie
+  text = text.replace(/\([^)]*\?[^)]*\?[^)]*\)/g, () => { cleaned++; return ""; });
+  // "Opcje:" + lista do końca linii lub podwójnego newline
+  text = text.replace(/Opcje:[\s\S]*?(?=\n\n|$)/gi, () => { cleaned++; return ""; });
+  // Domknij podwójne spacje i hanging whitespace po usunięciu nawiasów
+  text = text.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?;:])/g, "$1");
+  return { text: text.trim(), cleaned };
+}
+
 // Parsuje tagi metadanych z odpowiedzi Claude'a i zwraca clean text + metadata.
 // Oczekiwane tagi (Claude dodaje wg prompta):
 //   <topic>nazwa</topic>              - temat obecnego pytania
@@ -601,9 +621,12 @@ async function handleTurn(event, origin) {
   // Parse tagi + strip z visible text, zanim zapiszemy do turns / pokażemy userowi
   const parsed = parseTopicTags(text);
   const applied = applyTopicMetadata(session, parsed, mode);
-  const cleanText = parsed.cleanText;
 
-  const isFinal = looksLikeFinalReport(cleanText, mode);
+  const isFinal = looksLikeFinalReport(parsed.cleanText, mode);
+  // Post-processing: regex-owe czyszczenie sugestii ("np.", "opcje:", pytania
+  // retoryczne w nawiasach). Tylko dla pytań - raport finalny ma prawo do
+  // przykładów w rekomendacjach.
+  const { text: cleanText, cleaned: suggestionsCleaned } = cleanSuggestions(parsed.cleanText, isFinal);
 
   session.turns.push({ role: "assistant", content: cleanText, ts: nowIso() });
   touchSession(session);
@@ -633,6 +656,9 @@ async function handleTurn(event, origin) {
     topics_covered_count: session.topics_covered.length,
     topics_total: target,
     vague_count: vagueCount,
+    // Warstwa C: metric dla CloudWatch filter "suggestions_cleaned_per_turn".
+    // >0 = Claude złamał zakaz i regex musiał posprzątać.
+    suggestions_cleaned: suggestionsCleaned,
     is_final: isFinal,
     forced_final: forceFinal,
     forced_topic_close: forceTopicClose,
