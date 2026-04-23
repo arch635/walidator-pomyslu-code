@@ -81,7 +81,7 @@ aws logs filter-log-events \
   --start-time "$START_EPOCH_MS" \
   --filter-pattern "{\$.event = \"turn_ok\" && \$.session_id = \"$SESSION_ID\"}" \
   --output json 2>/dev/null | \
-  jq -r '.events[] | .message | fromjson | "tura=\(.assistant_turn) topics=\(.topics_covered_count)/\(.topics_total) suggestions_cleaned=\(.suggestions_cleaned)"' | \
+  jq -r '.events[] | .message | split("\t") | .[-1] | fromjson | "tura=\(.assistant_turn) topics=\(.topics_covered_count)/\(.topics_total) suggestions_cleaned=\(.suggestions_cleaned)"' | \
   tee "$OUT_DIR/cleaned-per-turn.txt"
 
 echo ""

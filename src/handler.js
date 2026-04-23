@@ -394,19 +394,18 @@ function cleanSuggestions(text, isFinal) {
   text = text.replace(/\(np\.\s[^)]+\)/gi, () => { cleaned++; return ""; });
   // (B) "(na przykład X)" z nawiasem
   text = text.replace(/\(na przykład\s[^)]+\)/gi, () => { cleaned++; return ""; });
-  // (C) BEZ NAWIASU: "Np. X Y Z." - do końca zdania (kropka/!/?/newline)
-  // \b na początku żeby nie złapać wewnątrz słów. Case-insensitive - łapie Np./np./NP.
-  text = text.replace(/\bNp\.\s[^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
-  // (D) BEZ NAWIASU: "Na przykład X Y Z." - analogicznie
-  text = text.replace(/\bNa przykład\s[^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
+  // (C) BEZ NAWIASU: "Np." / "Np:" / "Np " + reszta do końca zdania
+  // Separator po "Np." to [\s:,] żeby złapać "Np. X", "Np.: X", "Np.,X" itd.
+  text = text.replace(/\bNp\.[\s:,][^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
+  // (D) BEZ NAWIASU: "Na przykład X" / "Na przykład: X" / "Na przykład, X"
+  text = text.replace(/\bNa przykład[\s:,][^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
   // (E) Pytania retoryczne w nawiasach: (opcja A? opcja B?)
   text = text.replace(/\([^)]*\?[^)]*\?[^)]*\)/g, () => { cleaned++; return ""; });
-  // (F) Seria 2+ krótkich pytań retorycznych w jednej linii:
-  //     "Wyszukiwarka? AI po orzecznictwie? Integracja?" - oddzielone tylko spacją,
-  //     bez przeplatania zdań. Każdy segment <60 zn. zakończony '?', w serii min 2.
+  // (F) Seria 2+ krótkich pytań retorycznych w jednej linii
   text = text.replace(/(?:[^.!?\n]{1,60}\?\s+){2,}[^.!?\n]{1,60}\?/g, () => { cleaned++; return ""; });
-  // (G) "Opcje:" + lista do końca linii lub podwójnego newline
-  text = text.replace(/Opcje:[\s\S]*?(?=\n\n|$)/gi, () => { cleaned++; return ""; });
+  // (G) "Opcje [any]: [lista]" - obejmuje "Opcje:", "Opcje mogą być:",
+  //     "Możliwe opcje:", "Przykładowe opcje:". Max 30 znaków między "Opcj" a ":".
+  text = text.replace(/\b(?:Opcje|Opcji|Przykładowe opcje|Możliwe opcje|Możliwe odpowiedzi)[^:\n]{0,30}:[\s\S]*?(?=\n\n|$)/gi, () => { cleaned++; return ""; });
   // Domknij podwójne spacje i hanging whitespace po usunięciu
   text = text.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?;:])/g, "$1");
   // Puste zdania typu ". ." lub podwójne kropki po wycięciu
