@@ -390,16 +390,27 @@ function countUserTurns(session) {
 function cleanSuggestions(text, isFinal) {
   if (isFinal) return { text, cleaned: 0 };
   let cleaned = 0;
-  // "(np. X, Y, Z)" - wariant z kropką i spacją
+  // (A) "(np. X, Y, Z)" z nawiasem
   text = text.replace(/\(np\.\s[^)]+\)/gi, () => { cleaned++; return ""; });
-  // "(na przykład X)"
+  // (B) "(na przykład X)" z nawiasem
   text = text.replace(/\(na przykład\s[^)]+\)/gi, () => { cleaned++; return ""; });
-  // Pytania retoryczne w nawiasach: minimum 2 znaki "?" w jednym nawiasie
+  // (C) BEZ NAWIASU: "Np. X Y Z." - do końca zdania (kropka/!/?/newline)
+  // \b na początku żeby nie złapać wewnątrz słów. Case-insensitive - łapie Np./np./NP.
+  text = text.replace(/\bNp\.\s[^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
+  // (D) BEZ NAWIASU: "Na przykład X Y Z." - analogicznie
+  text = text.replace(/\bNa przykład\s[^.!?\n]*[.!?\n]/gi, () => { cleaned++; return ""; });
+  // (E) Pytania retoryczne w nawiasach: (opcja A? opcja B?)
   text = text.replace(/\([^)]*\?[^)]*\?[^)]*\)/g, () => { cleaned++; return ""; });
-  // "Opcje:" + lista do końca linii lub podwójnego newline
+  // (F) Seria 2+ krótkich pytań retorycznych w jednej linii:
+  //     "Wyszukiwarka? AI po orzecznictwie? Integracja?" - oddzielone tylko spacją,
+  //     bez przeplatania zdań. Każdy segment <60 zn. zakończony '?', w serii min 2.
+  text = text.replace(/(?:[^.!?\n]{1,60}\?\s+){2,}[^.!?\n]{1,60}\?/g, () => { cleaned++; return ""; });
+  // (G) "Opcje:" + lista do końca linii lub podwójnego newline
   text = text.replace(/Opcje:[\s\S]*?(?=\n\n|$)/gi, () => { cleaned++; return ""; });
-  // Domknij podwójne spacje i hanging whitespace po usunięciu nawiasów
+  // Domknij podwójne spacje i hanging whitespace po usunięciu
   text = text.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?;:])/g, "$1");
+  // Puste zdania typu ". ." lub podwójne kropki po wycięciu
+  text = text.replace(/\.\s+\./g, ".").replace(/\n{3,}/g, "\n\n");
   return { text: text.trim(), cleaned };
 }
 
