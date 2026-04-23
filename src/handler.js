@@ -455,15 +455,15 @@ function cleanSuggestions(text, isFinal) {
 //   <topic_quality>nazwa:vague|concrete</topic_quality> - ocena zamykanego tematu
 // Tagi są strip'owane z visible text (nie idą do usera, nie idą do turns[].content).
 function parseTopicTags(text) {
-  const topicMatch = text.match(/<topic>\s*([a-z_]+)\s*<\/topic>/i);
-  const qualityMatch = text.match(/<topic_quality>\s*([a-z_]+)\s*:\s*(vague|concrete)\s*<\/topic_quality>/i);
+  const topicMatch = text.match(/<topic>\s*([a-z0-9_]+)\s*<\/topic>/i);
+  const qualityMatch = text.match(/<topic_quality>\s*([a-z0-9_]+)\s*:\s*(vague|concrete)\s*<\/topic_quality>/i);
   const topic = topicMatch ? topicMatch[1].toLowerCase() : null;
   const topicQuality = qualityMatch
     ? { topic: qualityMatch[1].toLowerCase(), quality: qualityMatch[2].toLowerCase() }
     : null;
   const cleanText = text
-    .replace(/<topic>\s*[a-z_]+\s*<\/topic>/gi, "")
-    .replace(/<topic_quality>\s*[a-z_]+\s*:\s*(vague|concrete)\s*<\/topic_quality>/gi, "")
+    .replace(/<topic>\s*[a-z0-9_]+\s*<\/topic>/gi, "")
+    .replace(/<topic_quality>\s*[a-z0-9_]+\s*:\s*(vague|concrete)\s*<\/topic_quality>/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { cleanText, topic, topicQuality };

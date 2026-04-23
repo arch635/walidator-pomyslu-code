@@ -21,8 +21,8 @@ provider:
     PROMPT_PATH: prompts/walidator-v2.md
     PROMPT_PATH_MINI: prompts/walidator-mini.md
     SESSIONS_TABLE: walidator-sessions-${self:provider.stage}
-    MAX_TURNS: "25"
-    MAX_TURNS_MINI: "5"
+    MAX_TURNS: "30"
+    MAX_TURNS_MINI: "12"
     PROMPT_CACHE_ENABLED: "true"
     ENABLE_AUTO_SHUTDOWN: "false"
   iam:
