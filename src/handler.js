@@ -668,7 +668,14 @@ async function handleTurn(event, origin) {
   const parsed = parseTopicTags(text);
   const applied = applyTopicMetadata(session, parsed, mode);
 
-  const isFinal = looksLikeFinalReport(parsed.cleanText, mode);
+  let isFinal = looksLikeFinalReport(parsed.cleanText, mode);
+  // Etap 6: gdy backend wymusił raport (topics_covered >= target lub
+  // assistantTurns >= MAX_TURNS), oznaczamy sesję jako final NIEZALEŻNIE
+  // od tego czy Claude odpowiedział formatem raportu. Chroni przed bugiem
+  // session 67dbadb9 gdzie Claude po [WYGENERUJ RAPORT TERAZ] zadał kolejne
+  // pytanie i sesja wisiała bez werdyktu do TTL.
+  const backendForcedFinal = forceFinal && !isFinal;
+  if (forceFinal) isFinal = true;
   // Post-processing: regex-owe czyszczenie sugestii ("np.", "opcje:", pytania
   // retoryczne w nawiasach). Tylko dla pytań - raport finalny ma prawo do
   // przykładów w rekomendacjach.
@@ -724,6 +731,8 @@ async function handleTurn(event, origin) {
     footer_injected: footerInjected,
     is_final: isFinal,
     forced_final: forceFinal,
+    // Etap 6: true gdy backend oznaczył final bez raportu od Claude'a
+    backend_forced_final: backendForcedFinal,
     forced_topic_close: forceTopicClose,
     applied_close: applied.closedTopic,
     applied_new: applied.newTopic,
