@@ -289,6 +289,23 @@ resources:
     # Każdy turn_ok z suggestions_cleaned > 0 = Claude zasugerował mimo zakazu.
     # Namespace "Walidator/Quality", metric "SuggestionsCleaned".
     # Target: <5% tur (obecnie ~20%).
+    # Etap 4: metric dla halucynacji biograficznej. banned_terms_detected > 0
+    # oznacza że Claude wymyślił firmę/datę Artura - sanitize zastąpił "[usunięto]".
+    # Target: 0 (każde wystąpienie to regression).
+    BannedTermsMetricFilter:
+      Type: AWS::Logs::MetricFilter
+      Properties:
+        LogGroupName:
+          Fn::Sub: "/aws/lambda/${WalidatorLambdaFunction}"
+        FilterName: walidator-${self:provider.stage}-banned-terms
+        FilterPattern: '{ $.event = "turn_ok" && $.banned_terms_detected = * }'
+        MetricTransformations:
+          - MetricName: BannedTermsDetected
+            MetricNamespace: Walidator/Quality
+            MetricValue: "$.banned_terms_detected"
+            DefaultValue: 0
+            Unit: Count
+
     SuggestionsCleanedMetricFilter:
       Type: AWS::Logs::MetricFilter
       Properties:

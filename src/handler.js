@@ -383,6 +383,35 @@ function countUserTurns(session) {
   return session.turns.filter((t) => t.role === "user").length;
 }
 
+// Safety net przeciwko halucynacji biograficznej Artura. Claude czasem wymyśla
+// nazwy firm i daty z prompta, mimo że prompt już ich nie wymienia. Lista
+// ZABRONIONYCH terminów (etap 4 naprawy fakt-checkingowej) - wszystkie
+// zastąpione "[usunięto]" + zliczane w logu CW "banned_terms_detected".
+const BANNED_TERMS = [
+  /\bEnzo\b/gi,
+  /\bSport ?24(?:\.pl)?\b/gi,
+  /\bSocial\s*WiFi\b/gi,
+  /\bFC[.\s]?APP\b/gi,
+  /\bFCAPP\b/gi,
+  // rok biograficzny + Artur/Racicki w pobliżu (do 60 znaków)
+  /\b(?:2004|2010|2021|2024)\b[^\n]{0,60}(?:Artur|Racicki)/gi,
+  /(?:Artur|Racicki)[^\n]{0,60}\b(?:2004|2010|2021|2024)\b/gi
+];
+
+function sanitizeReport(text) {
+  let detected = 0;
+  const matched = [];
+  let cleaned = text;
+  for (const rx of BANNED_TERMS) {
+    cleaned = cleaned.replace(rx, (m) => {
+      detected++;
+      matched.push(m);
+      return "[usunięto]";
+    });
+  }
+  return { text: cleaned, detected, matched };
+}
+
 // Post-processing: usuwa sugestie odpowiedzi które Claude czasem wrzuca mimo
 // reguły ZAKAZ SUGEROWANIA. Zwraca { text, cleaned } gdzie cleaned = liczba
 // trafień (dla CloudWatch metric "suggestions_cleaned_per_turn").
@@ -643,7 +672,11 @@ async function handleTurn(event, origin) {
   // Post-processing: regex-owe czyszczenie sugestii ("np.", "opcje:", pytania
   // retoryczne w nawiasach). Tylko dla pytań - raport finalny ma prawo do
   // przykładów w rekomendacjach.
-  const { text: cleanText, cleaned: suggestionsCleaned } = cleanSuggestions(parsed.cleanText, isFinal);
+  let { text: cleanText, cleaned: suggestionsCleaned } = cleanSuggestions(parsed.cleanText, isFinal);
+  // Etap 4: sanitize banned terms (firmy/daty Artura) w każdej odpowiedzi.
+  // Halucynacje pojawiały się głównie w raportach, ale guard stosujemy wszędzie.
+  const sanitized = sanitizeReport(cleanText);
+  cleanText = sanitized.text;
 
   session.turns.push({ role: "assistant", content: cleanText, ts: nowIso() });
   touchSession(session);
@@ -676,6 +709,9 @@ async function handleTurn(event, origin) {
     // Warstwa C: metric dla CloudWatch filter "suggestions_cleaned_per_turn".
     // >0 = Claude złamał zakaz i regex musiał posprzątać.
     suggestions_cleaned: suggestionsCleaned,
+    // Etap 4: sanitize banned terms. >0 = Claude wymyślił firmę/datę Artura.
+    banned_terms_detected: sanitized.detected,
+    banned_terms_matched: sanitized.matched,
     is_final: isFinal,
     forced_final: forceFinal,
     forced_topic_close: forceTopicClose,
