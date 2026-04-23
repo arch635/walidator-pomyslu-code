@@ -58,7 +58,7 @@
 
       <div class="chat__header" id="chat-header">
         <div class="chat__progress" aria-live="polite">
-          <span id="turn-counter" class="chat__counter">Tura 0 z 5</span>
+          <span id="turn-counter" class="chat__counter">Temat 0/5</span>
           <div class="chat__bar" aria-hidden="true"><div id="turn-bar" class="chat__bar-fill" style="width:0%"></div></div>
         </div>
         <button type="button" id="reset-btn" class="chat__reset" hidden>Zacznij od nowa</button>
@@ -67,13 +67,6 @@
       <div id="messages" class="chat__messages" aria-live="polite" aria-atomic="false"></div>
 
       <div id="verdict-box" class="chat__verdict" hidden></div>
-
-      <div id="upgrade-cta" class="chat__upgrade" hidden>
-        <div class="chat__upgrade-text">
-          Chcesz pójść głębiej? Pełna walidacja zadaje 25 pytań i pokazuje co naprawdę decyduje o sukcesie pomysłu.
-        </div>
-        <button type="button" id="upgrade-btn" class="chat__upgrade-btn">Przejdź do pełnej walidacji 25 pytań →</button>
-      </div>
 
       <form id="chat-form" class="chat__form" novalidate>
         <label for="message" class="chat__label">Twoja odpowiedź</label>
@@ -86,9 +79,48 @@
         </div>
       </form>
 
+      <form id="feedback-form" class="feedback-box" hidden novalidate>
+        <h3 class="feedback-box__title">Twoja opinia pomaga ulepszać walidator</h3>
+        <p class="feedback-box__lead muted">30 sekund - zanotujemy każdą odpowiedź.</p>
+
+        <label class="feedback-box__label">Jak oceniasz trafność raportu?</label>
+        <div class="rating" id="rating" role="radiogroup" aria-label="Ocena 1-5">
+          <button type="button" class="rating__star" data-value="1" role="radio" aria-checked="false" aria-label="1 gwiazdka">☆</button>
+          <button type="button" class="rating__star" data-value="2" role="radio" aria-checked="false" aria-label="2 gwiazdki">☆</button>
+          <button type="button" class="rating__star" data-value="3" role="radio" aria-checked="false" aria-label="3 gwiazdki">☆</button>
+          <button type="button" class="rating__star" data-value="4" role="radio" aria-checked="false" aria-label="4 gwiazdki">☆</button>
+          <button type="button" class="rating__star" data-value="5" role="radio" aria-checked="false" aria-label="5 gwiazdek">☆</button>
+          <input type="hidden" id="rating-value" name="rating" value="">
+        </div>
+
+        <label class="feedback-box__label" for="feedback-valuable">Co było najcenniejsze?</label>
+        <textarea id="feedback-valuable" name="feedback_valuable" rows="2" maxlength="500" placeholder="Jedna rzecz którą zabierzesz"></textarea>
+
+        <label class="feedback-box__label" for="feedback-missing">Czego zabrakło?</label>
+        <textarea id="feedback-missing" name="feedback_missing" rows="2" maxlength="500" placeholder="Opcjonalne"></textarea>
+
+        <label class="feedback-box__label" for="feedback-action">Co zrobisz po tej walidacji?</label>
+        <textarea id="feedback-action" name="feedback_action" rows="2" maxlength="500" placeholder="Jedno konkretne działanie"></textarea>
+
+        <div class="feedback-box__footer">
+          <span id="feedback-error" class="feedback-box__error" hidden></span>
+          <button type="submit" id="feedback-submit" class="feedback-box__submit">Wyślij feedback</button>
+        </div>
+      </form>
+
+      <div id="feedback-thanks" class="chat__upgrade" hidden>
+        <div class="chat__upgrade-text">
+          <strong>Dziękuję!</strong> Twoja opinia trafiła do dziennego raportu walidatora.
+        </div>
+        <div class="chat__upgrade-actions">
+          <button type="button" id="restart-btn" class="chat__upgrade-btn chat__upgrade-btn--ghost">Zacznij od nowa</button>
+          <button type="button" id="upgrade-btn" class="chat__upgrade-btn" hidden>Przejdź do pełnej walidacji 25 pytań →</button>
+        </div>
+      </div>
+
       <p id="error-box" class="chat__error" hidden></p>
 
-      <p class="chat__hint muted">
+      <p class="chat__hint muted" id="chat-hint">
         Tip: piszesz krótko i konkretnie. Żadnych ogólników - podaj liczby, imiona, daty. Sesja utrzymuje się w tej przeglądarce.
       </p>
     </div>

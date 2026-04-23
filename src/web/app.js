@@ -8,13 +8,14 @@
 
   const API_BASE = "__API_ENDPOINT__";
   const TURN_URL = API_BASE + "/walidator/turn";
+  const FEEDBACK_URL = API_BASE + "/walidator/feedback";
   const SESSION_URL = (id) => API_BASE + "/walidator/session/" + encodeURIComponent(id);
   const STORAGE_KEY = "walidator.session_id.v1";
   const MODE_PREF_KEY = "walidator.mode_pref.v1";
-  const MAX_TURNS_BY_MODE = { mini: 5, full: 25 };
+  const TOPICS_TOTAL_BY_MODE = { mini: 5, full: 25 };
   const MODE_DESCRIPTIONS = {
     mini: "Szybka walidacja 5 kluczowych aspektów - idealna żeby sprawdzić pomysł w 5 minut.",
-    full: "Dogłębna analiza 25 pytań - Twój kompleksowy raport z red flagami i planem działania."
+    full: "Dogłębna analiza 25 tematów - Twój kompleksowy raport z red flagami i planem działania."
   };
   const DEFAULT_MODE = "mini";
 
@@ -32,16 +33,27 @@
   const modeDesc = document.getElementById("mode-desc");
   const modeMiniBtn = document.getElementById("mode-mini");
   const modeFullBtn = document.getElementById("mode-full");
-  const upgradeCta = document.getElementById("upgrade-cta");
+  const feedbackForm = document.getElementById("feedback-form");
+  const feedbackSubmit = document.getElementById("feedback-submit");
+  const feedbackError = document.getElementById("feedback-error");
+  const feedbackValuable = document.getElementById("feedback-valuable");
+  const feedbackMissing = document.getElementById("feedback-missing");
+  const feedbackAction = document.getElementById("feedback-action");
+  const ratingEl = document.getElementById("rating");
+  const ratingValueEl = document.getElementById("rating-value");
+  const feedbackThanks = document.getElementById("feedback-thanks");
+  const restartBtn = document.getElementById("restart-btn");
   const upgradeBtn = document.getElementById("upgrade-btn");
+  const chatHint = document.getElementById("chat-hint");
 
   let sessionId = null;
   let isFinal = false;
-  let userTurnCount = 0;
+  let topicsCoveredCount = 0;
   let sending = false;
+  let feedbackSending = false;
   let mode = DEFAULT_MODE;
 
-  function maxTurns() { return MAX_TURNS_BY_MODE[mode] || MAX_TURNS_BY_MODE.full; }
+  function topicsTotal() { return TOPICS_TOTAL_BY_MODE[mode] || TOPICS_TOTAL_BY_MODE.full; }
 
   // --- helpers ---
 
@@ -77,14 +89,14 @@
   }
 
   function updateProgress() {
-    const total = maxTurns();
-    const shown = Math.min(userTurnCount, total);
+    const total = topicsTotal();
+    const shown = Math.min(topicsCoveredCount, total);
     turnCounter.textContent = isFinal
       ? "Rozmowa zakończona - raport poniżej"
-      : "Tura " + shown + " z " + total;
+      : "Temat " + shown + "/" + total;
     const pct = Math.max(0, Math.min(100, (shown / total) * 100));
     turnBar.style.width = pct + "%";
-    resetBtn.hidden = userTurnCount === 0 && !isFinal;
+    resetBtn.hidden = topicsCoveredCount === 0 && !isFinal;
   }
 
   function setActiveMode(newMode, opts) {
@@ -119,9 +131,17 @@
     if (modeDesc) modeDesc.hidden = false;
   }
 
-  function showUpgradeCta(show) {
-    if (!upgradeCta) return;
-    upgradeCta.hidden = !show;
+  function showFeedbackForm(show) {
+    if (!feedbackForm) return;
+    feedbackForm.hidden = !show;
+    // Gdy pokazujemy feedback - chowamy hint o sesji
+    if (chatHint) chatHint.hidden = !!show;
+  }
+
+  function showFeedbackThanks(show) {
+    if (!feedbackThanks) return;
+    feedbackThanks.hidden = !show;
+    if (show && upgradeBtn) upgradeBtn.hidden = mode !== "mini";
   }
 
   function scrollToBottom() {
@@ -185,7 +205,9 @@
     setInputEnabled(false);
     textarea.value = "";
     updateCount();
-    sendBtn.textContent = "Sesja zakończona";
+    // Po raporcie: ukryj form chatu, pokaz feedback box
+    if (form) form.hidden = true;
+    showFeedbackForm(true);
     updateProgress();
   }
 
@@ -236,12 +258,17 @@
         if (t.role === "user") appendUserBubble(t.content);
         else appendAssistantBubble(t.content, { final: isFinal && t === data.turns[data.turns.length - 1] });
       });
-      userTurnCount = (data.turns || []).filter((t) => t.role === "user").length;
+      // topics_covered source-of-truth z backendu. Legacy sesje bez pola = puste.
+      topicsCoveredCount = Array.isArray(data.topics_covered) ? data.topics_covered.length : 0;
 
       if (isFinal) {
         showVerdict(data.werdykt);
         lockAfterFinal();
-        showUpgradeCta(mode === "mini");
+        // Jesli feedback juz wyslany (user wrocil do sesji po zamknieciu) - pokaz podziekowanie
+        if (data.feedback) {
+          showFeedbackForm(false);
+          showFeedbackThanks(true);
+        }
       } else {
         updateProgress();
       }
@@ -256,11 +283,16 @@
     clearStoredSession();
     sessionId = null;
     isFinal = false;
-    userTurnCount = 0;
+    topicsCoveredCount = 0;
     messagesEl.innerHTML = "";
     verdictBox.hidden = true;
     verdictBox.innerHTML = "";
-    showUpgradeCta(false);
+    // Ukryj feedback UI + thanks, przywroc chat form
+    showFeedbackForm(false);
+    showFeedbackThanks(false);
+    resetFeedbackInputs();
+    if (form) form.hidden = false;
+    if (chatHint) chatHint.hidden = false;
     setError(null);
     setInputEnabled(true);
     sendBtn.textContent = "Wyślij";
@@ -271,6 +303,28 @@
     updateProgress();
     setPlaceholder();
     textarea.focus();
+  }
+
+  function resetFeedbackInputs() {
+    if (feedbackValuable) feedbackValuable.value = "";
+    if (feedbackMissing) feedbackMissing.value = "";
+    if (feedbackAction) feedbackAction.value = "";
+    if (ratingValueEl) ratingValueEl.value = "";
+    setRating(0);
+    if (feedbackError) { feedbackError.hidden = true; feedbackError.textContent = ""; }
+  }
+
+  function setRating(value) {
+    if (!ratingEl) return;
+    ratingValueEl.value = value ? String(value) : "";
+    const stars = ratingEl.querySelectorAll(".rating__star");
+    stars.forEach((s) => {
+      const v = Number(s.getAttribute("data-value"));
+      const filled = value > 0 && v <= value;
+      s.textContent = filled ? "★" : "☆";
+      s.classList.toggle("is-filled", filled);
+      s.setAttribute("aria-checked", v === value ? "true" : "false");
+    });
   }
 
   // --- send turn ---
@@ -309,10 +363,8 @@
     textarea.value = "";
     updateCount();
 
-    userTurnCount += 1;
     // Po pierwszej wysłanej wiadomości chowamy toggle - tryb sesji jest już zalockowany.
     hideToggle();
-    updateProgress();
 
     appendLoadingBubble();
 
@@ -327,8 +379,9 @@
         setActiveMode(data.mode, { silent: true });
       }
 
-      if (typeof data.user_turn_number === "number") {
-        userTurnCount = data.user_turn_number;
+      // topics_covered jest source of truth - backend wie ile tematów zamknęliśmy
+      if (Array.isArray(data.topics_covered)) {
+        topicsCoveredCount = data.topics_covered.length;
       }
 
       removeLoadingBubble();
@@ -339,7 +392,6 @@
       if (finalFlag) {
         showVerdict(data.werdykt);
         lockAfterFinal();
-        showUpgradeCta(mode === "mini");
       } else {
         setInputEnabled(true);
         sendBtn.textContent = "Wyślij";
@@ -350,10 +402,9 @@
     } catch (err) {
       removeLoadingBubble();
       setError("Nie udało się wysłać: " + (err.message || "błąd sieci") + ". Twoja wiadomość jest wyżej - możesz spróbować ponownie.");
-      userTurnCount = Math.max(0, userTurnCount - 1);
       // Jeśli wciąż brak sesji (pierwsza tura padła) - pokazujemy toggle
       // żeby user mógł zmienić tryb przed retry.
-      if (!sessionId && userTurnCount === 0) showToggle();
+      if (!sessionId && topicsCoveredCount === 0) showToggle();
       setInputEnabled(true);
       sendBtn.textContent = "Wyślij";
       updateProgress();
@@ -361,6 +412,76 @@
       sending = false;
     }
   });
+
+  // --- feedback submit ---
+
+  async function sendFeedback(body) {
+    const res = await fetch(FEEDBACK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+    return data;
+  }
+
+  if (feedbackForm) {
+    feedbackForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (feedbackSending) return;
+      if (!sessionId) {
+        feedbackError.hidden = false;
+        feedbackError.textContent = "Brak identyfikatora sesji - odśwież stronę.";
+        return;
+      }
+
+      const rating = Number(ratingValueEl.value) || 0;
+      if (!rating || rating < 1 || rating > 5) {
+        feedbackError.hidden = false;
+        feedbackError.textContent = "Wybierz ocenę 1-5 gwiazdek.";
+        return;
+      }
+
+      feedbackError.hidden = true;
+      feedbackSending = true;
+      feedbackSubmit.disabled = true;
+      feedbackSubmit.textContent = "Wysyłam...";
+
+      try {
+        await sendFeedback({
+          session_id: sessionId,
+          rating,
+          valuable: (feedbackValuable.value || "").trim(),
+          missing: (feedbackMissing.value || "").trim(),
+          action: (feedbackAction.value || "").trim()
+        });
+        showFeedbackForm(false);
+        showFeedbackThanks(true);
+      } catch (err) {
+        feedbackError.hidden = false;
+        feedbackError.textContent = "Nie udało się wysłać: " + (err.message || "błąd sieci");
+      } finally {
+        feedbackSending = false;
+        feedbackSubmit.disabled = false;
+        feedbackSubmit.textContent = "Wyślij feedback";
+      }
+    });
+  }
+
+  if (ratingEl) {
+    ratingEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".rating__star");
+      if (!btn) return;
+      const v = Number(btn.getAttribute("data-value"));
+      if (!v) return;
+      setRating(v);
+    });
+  }
+
+  if (restartBtn) {
+    restartBtn.addEventListener("click", () => resetSession());
+  }
 
   resetBtn.addEventListener("click", () => {
     if (!confirm("Porzucić obecną rozmowę i zacząć od nowa?")) return;
