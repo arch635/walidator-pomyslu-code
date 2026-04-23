@@ -17,12 +17,35 @@ const MAX_OUTPUT_TOKENS = parseInt(process.env.MAX_OUTPUT_TOKENS || "2500", 10);
 const MAX_OUTPUT_TOKENS_REPORT = parseInt(process.env.MAX_OUTPUT_TOKENS_REPORT || "3000", 10);
 const MAX_OUTPUT_TOKENS_REPORT_MINI = parseInt(process.env.MAX_OUTPUT_TOKENS_REPORT_MINI || "900", 10);
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE || "walidator-sessions-prod";
-const MAX_TURNS = parseInt(process.env.MAX_TURNS || "25", 10);
-const MAX_TURNS_MINI = parseInt(process.env.MAX_TURNS_MINI || "5", 10);
+// MAX_TURNS to safety net. Właściwy warunek zakończenia = pokrycie wszystkich
+// TOPICS_* (mini: 5 tematów, full: 25). Bufor ~5 follow-upów + werdykt.
+const MAX_TURNS = parseInt(process.env.MAX_TURNS || "30", 10);
+const MAX_TURNS_MINI = parseInt(process.env.MAX_TURNS_MINI || "12", 10);
+// Ile assistant turn w jednym temacie dopuszczamy zanim Lambda wymusi zmianę.
+// 1 pytanie + 1 follow-up = 2, potem MUST move on (hard limit).
+const MAX_TURNS_PER_TOPIC = parseInt(process.env.MAX_TURNS_PER_TOPIC || "2", 10);
 const PROMPT_CACHE_ENABLED = (process.env.PROMPT_CACHE_ENABLED || "true").toLowerCase() === "true";
 const SESSION_TTL_DAYS = 30;
 const VALID_MODES = new Set(["mini", "full"]);
 const DEFAULT_MODE = "mini";
+
+// Mapowanie tematów per tryb. Claude taguje każdą odpowiedź <topic>nazwa</topic>
+// oraz zamyka poprzedni temat tagiem <topic_quality>nazwa:concrete|vague</topic_quality>.
+// Lambda egzekwuje kolejność i limity, Claude decyduje o jakości.
+const TOPICS_MINI = ["idea", "customer", "competition", "timing", "risk"];
+const TOPICS_FULL = [
+  "idea_description", "idea_uniqueness",
+  "problem_description", "problem_cost", "problem_conversations", "problem_quote", "problem_alternatives",
+  "customer_icp", "customer_location", "customer_attempts", "customer_paying", "customer_pipeline",
+  "competition_list", "competition_advantage", "market_size", "market_timing",
+  "revenue_model", "cac_ltv", "current_spending", "runway",
+  "team_composition", "team_experience", "sales_owner",
+  "biggest_risk", "first_10_customers"
+];
+
+function topicsForMode(mode) {
+  return mode === "mini" ? TOPICS_MINI : TOPICS_FULL;
+}
 
 const ONE_SHOT_OVERRIDE = `
 
@@ -294,6 +317,12 @@ function createSession(pomyslInitial, mode) {
     turns: [],
     is_final: false,
     werdykt_koncowy: null,
+    // Metadane tematów. Claude taguje w output, Lambda parsuje i zapisuje.
+    topics_covered: [],           // lista nazw tematów zamkniętych
+    topics_quality: {},           // { [topic]: "concrete" | "vague" }
+    current_topic: null,          // aktualnie omawiany temat
+    assistant_turns_in_current: 0,// ile tur asystenta w current_topic (hard limit = MAX_TURNS_PER_TOPIC)
+    feedback: null,               // { rating, valuable, missing, action, submitted_at }
     ttl: nowSec + SESSION_TTL_DAYS * 24 * 3600
   };
 }
@@ -309,6 +338,80 @@ function countAssistantTurns(session) {
 
 function countUserTurns(session) {
   return session.turns.filter((t) => t.role === "user").length;
+}
+
+// Parsuje tagi metadanych z odpowiedzi Claude'a i zwraca clean text + metadata.
+// Oczekiwane tagi (Claude dodaje wg prompta):
+//   <topic>nazwa</topic>              - temat obecnego pytania
+//   <topic_quality>nazwa:vague|concrete</topic_quality> - ocena zamykanego tematu
+// Tagi są strip'owane z visible text (nie idą do usera, nie idą do turns[].content).
+function parseTopicTags(text) {
+  const topicMatch = text.match(/<topic>\s*([a-z_]+)\s*<\/topic>/i);
+  const qualityMatch = text.match(/<topic_quality>\s*([a-z_]+)\s*:\s*(vague|concrete)\s*<\/topic_quality>/i);
+  const topic = topicMatch ? topicMatch[1].toLowerCase() : null;
+  const topicQuality = qualityMatch
+    ? { topic: qualityMatch[1].toLowerCase(), quality: qualityMatch[2].toLowerCase() }
+    : null;
+  const cleanText = text
+    .replace(/<topic>\s*[a-z_]+\s*<\/topic>/gi, "")
+    .replace(/<topic_quality>\s*[a-z_]+\s*:\s*(vague|concrete)\s*<\/topic_quality>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { cleanText, topic, topicQuality };
+}
+
+// Aplikuje tagi do stanu sesji. Wywoływane po każdej odpowiedzi asystenta.
+// - jeśli topic_quality dotyczy current_topic (lub innego poprzedniego) → zamyka ten temat
+// - jeśli topic różny od current_topic → zmienia temat, reset licznika
+// - jeśli topic == current_topic → to follow-up, inkrementuje licznik
+// Zwraca: { closedTopic, newTopic, forcedClose } dla logów.
+function applyTopicMetadata(session, parsed, mode) {
+  const valid = new Set(topicsForMode(mode));
+  const prevTopic = session.current_topic;
+  const result = { closedTopic: null, newTopic: null, forcedClose: false };
+
+  // Claude zamknął temat (tag topic_quality)
+  if (parsed.topicQuality && valid.has(parsed.topicQuality.topic)) {
+    const t = parsed.topicQuality.topic;
+    if (!session.topics_covered.includes(t)) {
+      session.topics_covered.push(t);
+    }
+    session.topics_quality[t] = parsed.topicQuality.quality;
+    result.closedTopic = t;
+  }
+
+  // Claude ustawił nowy temat
+  if (parsed.topic && valid.has(parsed.topic)) {
+    if (parsed.topic !== prevTopic) {
+      session.current_topic = parsed.topic;
+      session.assistant_turns_in_current = 1;
+      result.newTopic = parsed.topic;
+    } else {
+      session.assistant_turns_in_current = (session.assistant_turns_in_current || 0) + 1;
+    }
+  } else if (prevTopic) {
+    // brak <topic> w odpowiedzi - zakładamy kontynuację obecnego tematu
+    session.assistant_turns_in_current = (session.assistant_turns_in_current || 0) + 1;
+  }
+
+  return result;
+}
+
+// Zwraca temat do omówienia jako następny (pierwszy niepokryty z listy).
+function nextTopicFor(session, mode) {
+  const all = topicsForMode(mode);
+  return all.find((t) => !session.topics_covered.includes(t)) || null;
+}
+
+// Avoidance detection: ile tematów user'a były ogólne. Używane przy raporcie.
+function countVagueTopics(session) {
+  return Object.values(session.topics_quality || {}).filter((q) => q === "vague").length;
+}
+
+function vagueTopicList(session) {
+  return Object.entries(session.topics_quality || {})
+    .filter(([, q]) => q === "vague")
+    .map(([t]) => t);
 }
 
 // Detect final report by looking for the mandatory first header.
