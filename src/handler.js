@@ -694,17 +694,45 @@ async function handleTurn(event, origin) {
     footerInjected = true;
   }
 
+  // Etap 6 safety net: parser fallback - jeśli backend forsował zamknięcie
+  // (forceTopicClose) ale Claude nie dodał <topic_quality> tagu zamykającego,
+  // Lambda SAMA zamyka current_topic jako vague i inkrementuje next.
+  let topicsFallbackUsed = false;
+  if (forceTopicClose && session.current_topic && !applied.closedTopic) {
+    if (!session.topics_covered.includes(session.current_topic)) {
+      session.topics_covered.push(session.current_topic);
+      session.topics_quality[session.current_topic] = "vague";
+    }
+    const next = nextTopicFor(session, mode);
+    if (next) {
+      session.current_topic = next;
+      session.assistant_turns_in_current = 0;
+    }
+    topicsFallbackUsed = true;
+  }
+
   session.turns.push({ role: "assistant", content: cleanText, ts: nowIso() });
   touchSession(session);
+  // Etap 6: verdict default + tracking verdict_missing
+  let verdictMissing = false;
+  let maxTurnsReached = false;
   if (isFinal) {
     session.is_final = true;
     session.werdykt_koncowy = extractVerdict(cleanText);
+    // Safety: gdy raport ucięty lub Claude zwrócił pytanie zamiast raportu,
+    // werdykt jest null. Backend dokleja default 🟠 żeby UI nie wisiało
+    // pustym banerem + daily report miał parsable wartość.
+    if (!session.werdykt_koncowy) {
+      session.werdykt_koncowy = "🟠 POMARAŃCZOWE (backend fallback - brak parsowalnego werdyktu)";
+      verdictMissing = true;
+    }
     // Jeśli Claude wygenerował raport ale nie zamknął jeszcze ostatniego tematu
     // tagiem topic_quality - backend zamyka current_topic jako fallback (vague).
     if (session.current_topic && !session.topics_covered.includes(session.current_topic)) {
       session.topics_covered.push(session.current_topic);
       session.topics_quality[session.current_topic] = session.topics_quality[session.current_topic] || "vague";
     }
+    maxTurnsReached = reachedTurnsSafetyNet;
   }
 
   await saveSession(session);
@@ -734,6 +762,10 @@ async function handleTurn(event, origin) {
     // Etap 6: true gdy backend oznaczył final bez raportu od Claude'a
     backend_forced_final: backendForcedFinal,
     forced_topic_close: forceTopicClose,
+    // Etap 6 safety nets (CloudWatch metrics)
+    topics_fallback_used: topicsFallbackUsed,
+    verdict_missing: verdictMissing,
+    max_turns_reached: maxTurnsReached,
     applied_close: applied.closedTopic,
     applied_new: applied.newTopic,
     elapsed_ms: elapsed,

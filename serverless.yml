@@ -306,6 +306,49 @@ resources:
             DefaultValue: 0
             Unit: Count
 
+    # Etap 6: metryki safety netów - każda >0 = Claude zachował się nieprzewidywalnie.
+    TopicsFallbackMetricFilter:
+      Type: AWS::Logs::MetricFilter
+      Properties:
+        LogGroupName:
+          Fn::Sub: "/aws/lambda/${WalidatorLambdaFunction}"
+        FilterName: walidator-${self:provider.stage}-topics-fallback
+        FilterPattern: '{ $.event = "turn_ok" && $.topics_fallback_used = true }'
+        MetricTransformations:
+          - MetricName: TopicsFallbackUsed
+            MetricNamespace: Walidator/Quality
+            MetricValue: "1"
+            DefaultValue: 0
+            Unit: Count
+
+    VerdictMissingMetricFilter:
+      Type: AWS::Logs::MetricFilter
+      Properties:
+        LogGroupName:
+          Fn::Sub: "/aws/lambda/${WalidatorLambdaFunction}"
+        FilterName: walidator-${self:provider.stage}-verdict-missing
+        FilterPattern: '{ $.event = "turn_ok" && $.verdict_missing = true }'
+        MetricTransformations:
+          - MetricName: VerdictMissing
+            MetricNamespace: Walidator/Quality
+            MetricValue: "1"
+            DefaultValue: 0
+            Unit: Count
+
+    MaxTurnsReachedMetricFilter:
+      Type: AWS::Logs::MetricFilter
+      Properties:
+        LogGroupName:
+          Fn::Sub: "/aws/lambda/${WalidatorLambdaFunction}"
+        FilterName: walidator-${self:provider.stage}-max-turns-reached
+        FilterPattern: '{ $.event = "turn_ok" && $.max_turns_reached = true }'
+        MetricTransformations:
+          - MetricName: MaxTurnsReached
+            MetricNamespace: Walidator/Quality
+            MetricValue: "1"
+            DefaultValue: 0
+            Unit: Count
+
     SuggestionsCleanedMetricFilter:
       Type: AWS::Logs::MetricFilter
       Properties:
