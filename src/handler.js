@@ -406,6 +406,13 @@ function cleanSuggestions(text, isFinal) {
   // (G) "Opcje [any]: [lista]" - obejmuje "Opcje:", "Opcje mogą być:",
   //     "Możliwe opcje:", "Przykładowe opcje:". Max 30 znaków między "Opcj" a ":".
   text = text.replace(/\b(?:Opcje|Opcji|Przykładowe opcje|Możliwe opcje|Możliwe odpowiedzi)[^:\n]{0,30}:[\s\S]*?(?=\n\n|$)/gi, () => { cleaned++; return ""; });
+  // (H) "X, Y, czy Z?" - sugestia z 2+ przecinkami i "czy" przed ostatnią opcją.
+  //     Np. "mieszkańcy osiedla, studenci, czy inny segment?"
+  text = text.replace(/\b[\wąćęłńóśźż\s]+,\s*[\wąćęłńóśźż\s]+,\s*czy\s+[\wąćęłńóśźż\s]+\?/gi, () => { cleaned++; return "?"; });
+  // (I) "X czy Y?" - sugestia z dwiema opcjami. Uwaga: łapie też legitymne
+  //     pytania wyboru ("miesięcznie czy rocznie?") - Artur zdecydował że
+  //     i tak lepiej wymusić otwarte pytanie.
+  text = text.replace(/\b[\wąćęłńóśźż\s]+\s+czy\s+[\wąćęłńóśźż\s]+\?/gi, () => { cleaned++; return "?"; });
   // Domknij podwójne spacje i hanging whitespace po usunięciu
   text = text.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?;:])/g, "$1");
   // Puste zdania typu ". ." lub podwójne kropki po wycięciu
