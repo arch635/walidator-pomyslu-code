@@ -594,6 +594,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   flex-direction: column;
   gap: .25rem;
 }
+.chat__verdict[hidden] { display: none; }
 .chat__verdict-label {
   font-size: 0.75rem;
   color: var(--text-muted);
