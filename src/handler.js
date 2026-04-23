@@ -672,6 +672,64 @@ async function handleTurn(event, origin) {
   }, origin);
 }
 
+async function handleFeedback(event, origin) {
+  let payload;
+  try { payload = event.body ? JSON.parse(event.body) : {}; }
+  catch (e) { return json(400, { status: "error", message: "Invalid JSON" }, origin); }
+
+  const sessionId = (payload.session_id || "").trim();
+  if (!sessionId) return json(400, { status: "error", message: "Pole 'session_id' jest wymagane." }, origin);
+
+  const rating = Number(payload.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return json(400, { status: "error", message: "Pole 'rating' musi być liczbą całkowitą 1-5." }, origin);
+  }
+
+  // Pozostałe pola opcjonalne, limit długości 500 znaków każde (ochrona przed abuse).
+  const clip = (s) => String(s || "").trim().slice(0, 500);
+  const valuable = clip(payload.valuable);
+  const missing = clip(payload.missing);
+  const action = clip(payload.action);
+
+  const session = await loadSession(sessionId);
+  if (!session) return json(404, { status: "error", message: "Sesja nie istnieje." }, origin);
+
+  // Feedback ma sens tylko dla sesji zakończonej raportem.
+  if (!session.is_final) {
+    return json(409, { status: "error", message: "Feedback można wysłać dopiero po wygenerowaniu raportu." }, origin);
+  }
+
+  // Jeśli feedback już istnieje - nie nadpisujemy (MVP decyzja; można poluzować później).
+  if (session.feedback && session.feedback.submitted_at) {
+    return json(409, { status: "error", message: "Feedback dla tej sesji już został wysłany." }, origin);
+  }
+
+  session.feedback = {
+    rating,
+    valuable,
+    missing,
+    action,
+    submitted_at: nowIso()
+  };
+  touchSession(session);
+  await saveSession(session);
+
+  console.log(JSON.stringify({
+    event: "feedback_ok",
+    session_id: sessionId,
+    rating,
+    has_valuable: valuable.length > 0,
+    has_missing: missing.length > 0,
+    has_action: action.length > 0
+  }));
+
+  return json(200, {
+    status: "ok",
+    session_id: sessionId,
+    feedback: session.feedback
+  }, origin);
+}
+
 async function handleGetSession(event, origin) {
   const sessionId = event.pathParameters && event.pathParameters.id;
   if (!sessionId) return json(400, { status: "error", message: "Brak session_id w ścieżce." }, origin);
@@ -720,6 +778,9 @@ exports.handler = async (event) => {
   try {
     if (rawPath.endsWith("/walidator/turn")) {
       return await handleTurn(event, origin);
+    }
+    if (rawPath.endsWith("/walidator/feedback")) {
+      return await handleFeedback(event, origin);
     }
     if (rawPath.includes("/walidator/session/")) {
       return await handleGetSession(event, origin);

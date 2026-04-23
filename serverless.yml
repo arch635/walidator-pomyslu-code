@@ -85,6 +85,12 @@ functions:
           path: /walidator/turn
           method: options
       - httpApi:
+          path: /walidator/feedback
+          method: post
+      - httpApi:
+          path: /walidator/feedback
+          method: options
+      - httpApi:
           path: /walidator/session/{id}
           method: get
       - httpApi:

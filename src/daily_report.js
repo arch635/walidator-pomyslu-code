@@ -139,6 +139,33 @@ function perModeStats(sessions, sinceIso, modeName) {
   };
 }
 
+function aggregateFeedback(sessions) {
+  const withFeedback = sessions.filter((s) => s.feedback && typeof s.feedback.rating === "number");
+  if (withFeedback.length === 0) {
+    return { count: 0, avg_rating: null, top_valuable: [], top_missing: [] };
+  }
+  const ratings = withFeedback.map((s) => s.feedback.rating);
+  const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+
+  // Top 3 najświeższe cytaty z 'valuable' i 'missing'
+  const pickCitations = (field) => withFeedback
+    .filter((s) => s.feedback[field] && s.feedback[field].length > 0)
+    .sort((a, b) => (b.feedback.submitted_at || "").localeCompare(a.feedback.submitted_at || ""))
+    .slice(0, 3)
+    .map((s) => ({
+      text: s.feedback[field].length > 140 ? s.feedback[field].slice(0, 140) + "..." : s.feedback[field],
+      rating: s.feedback.rating,
+      mode: modeOf(s)
+    }));
+
+  return {
+    count: withFeedback.length,
+    avg_rating: Math.round(avg * 10) / 10,
+    top_valuable: pickCitations("valuable"),
+    top_missing: pickCitations("missing")
+  };
+}
+
 function aggregate(sessions, sinceIso) {
   const started = sessions.filter((s) => s.started_at >= sinceIso);
   const finals = sessions.filter((s) => s.is_final);
@@ -174,6 +201,7 @@ function aggregate(sessions, sinceIso) {
     }));
 
   const cost = estimateCostUsd(sessions);
+  const feedback = aggregateFeedback(sessions);
 
   return {
     total_in_window: sessions.length,
@@ -185,7 +213,8 @@ function aggregate(sessions, sinceIso) {
     top_ideas: ideas,
     cost,
     mini: perModeStats(sessions, sinceIso, "mini"),
-    full: perModeStats(sessions, sinceIso, "full")
+    full: perModeStats(sessions, sinceIso, "full"),
+    feedback
   };
 }
 
@@ -269,6 +298,24 @@ function renderPlainText(agg, since, now) {
       lines.push(`  ${i + 1}. [${idea.mode}] "${idea.excerpt}"`);
       if (idea.werdykt) lines.push(`     -> ${idea.werdykt}`);
     });
+    lines.push("");
+  }
+
+  if (agg.feedback && agg.feedback.count > 0) {
+    lines.push(`Feedback od userow (${agg.feedback.count} odpowiedzi):`);
+    lines.push(`  Srednia ocena: ${agg.feedback.avg_rating}/5`);
+    if (agg.feedback.top_valuable.length) {
+      lines.push("  Co bylo najcenniejsze:");
+      agg.feedback.top_valuable.forEach((c, i) => {
+        lines.push(`    ${i + 1}. [${c.rating}/5, ${c.mode}] "${c.text}"`);
+      });
+    }
+    if (agg.feedback.top_missing.length) {
+      lines.push("  Czego zabraklo:");
+      agg.feedback.top_missing.forEach((c, i) => {
+        lines.push(`    ${i + 1}. [${c.rating}/5, ${c.mode}] "${c.text}"`);
+      });
+    }
     lines.push("");
   }
 
@@ -357,6 +404,27 @@ function renderHtml(agg, since, now) {
         h.push(`<li style="margin:8px 0; line-height:1.5;">${modeBadge}&ldquo;${escapeHtml(idea.excerpt)}&rdquo;${idea.werdykt ? `<br><span style="color:#4a4a4a; font-size:13px;">Werdykt: ${escapeHtml(idea.werdykt)}</span>` : ""}</li>`);
       }
       h.push('</ol>');
+    }
+
+    if (agg.feedback && agg.feedback.count > 0) {
+      h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Feedback od userow</h3>');
+      h.push(`<p style="margin:0 0 12px; font-size:14px;"><b>${agg.feedback.count}</b> odpowiedzi &middot; srednia ocena: <b>${agg.feedback.avg_rating}/5</b></p>`);
+      if (agg.feedback.top_valuable.length) {
+        h.push('<p style="margin:8px 0 4px; font-size:13px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Co bylo najcenniejsze</p>');
+        h.push('<ul style="background:#fff; padding:10px 14px 10px 28px; border:1px solid #e2e2de; border-radius:6px; margin:0 0 12px; font-size:14px;">');
+        for (const c of agg.feedback.top_valuable) {
+          h.push(`<li style="margin:4px 0;"><span style="color:#4a4a4a; font-size:12px;">[${c.rating}/5, ${escapeHtml(c.mode)}]</span> &ldquo;${escapeHtml(c.text)}&rdquo;</li>`);
+        }
+        h.push('</ul>');
+      }
+      if (agg.feedback.top_missing.length) {
+        h.push('<p style="margin:8px 0 4px; font-size:13px; color:#4a4a4a; text-transform:uppercase; letter-spacing:.05em;">Czego zabraklo</p>');
+        h.push('<ul style="background:#fff; padding:10px 14px 10px 28px; border:1px solid #e2e2de; border-radius:6px; margin:0 0 12px; font-size:14px;">');
+        for (const c of agg.feedback.top_missing) {
+          h.push(`<li style="margin:4px 0;"><span style="color:#4a4a4a; font-size:12px;">[${c.rating}/5, ${escapeHtml(c.mode)}]</span> &ldquo;${escapeHtml(c.text)}&rdquo;</li>`);
+        }
+        h.push('</ul>');
+      }
     }
 
     h.push('<h3 style="font-family: Georgia, serif; color:#1a2a4a; margin:24px 0 8px;">Koszt szacunkowy</h3>');
