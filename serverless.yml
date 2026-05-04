@@ -120,6 +120,29 @@ custom:
     - https://walidator.racicki.com
 
 resources:
+  extensions:
+    # Throttling stage + per-route, broni przed nadużyciem publicznego API.
+    # Default = limit globalny dla całego API. Per-route ostrzejsze tam gdzie drogi Bedrock.
+    # Ruch normalny: 1-115 req/dzień. Limity dają 100x-1000x bufor.
+    HttpApiStage:
+      Properties:
+        DefaultRouteSettings:
+          ThrottlingBurstLimit: 200
+          ThrottlingRateLimit: 100
+        RouteSettings:
+          'POST /walidator':
+            ThrottlingBurstLimit: 10
+            ThrottlingRateLimit: 5
+          'POST /walidator/turn':
+            ThrottlingBurstLimit: 30
+            ThrottlingRateLimit: 10
+          'POST /walidator/feedback':
+            ThrottlingBurstLimit: 10
+            ThrottlingRateLimit: 3
+          'GET /walidator/session/{id}':
+            ThrottlingBurstLimit: 100
+            ThrottlingRateLimit: 30
+
   Resources:
     SessionsTable:
       Type: AWS::DynamoDB::Table
@@ -362,6 +385,31 @@ resources:
             MetricValue: "$.suggestions_cleaned"
             DefaultValue: 0
             Unit: Count
+
+    # COSTSEC Krok 13 (2026-05-04): wczesne ostrzeżenie przy nadużyciu API.
+    # 100 inwokacji/h = ~20x dzisiejszy peak (113/dzień ≈ 5/h). Strzał = bot albo viral.
+    # Cost Anomaly Detection łapie do 24h, alarm tu jest godzinowy → wcześniej widać.
+    HighInvocationsAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: walidator-${self:provider.stage}-lambda-high-invocations
+        AlarmDescription: Walidator Lambda > 100 inwokacji/h (20x typowy ruch, możliwy bot lub viral)
+        Namespace: AWS/Lambda
+        MetricName: Invocations
+        Dimensions:
+          - Name: FunctionName
+            Value:
+              Ref: WalidatorLambdaFunction
+        Statistic: Sum
+        Period: 3600
+        EvaluationPeriods: 1
+        Threshold: 100
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - Ref: AlertsTopic
+        OKActions:
+          - Ref: AlertsTopic
 
     DailyReportMissedAlarm:
       Type: AWS::CloudWatch::Alarm
