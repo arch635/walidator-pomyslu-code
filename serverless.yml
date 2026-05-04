@@ -159,12 +159,21 @@ resources:
           AttributeName: ttl
           Enabled: true
         PointInTimeRecoverySpecification:
-          PointInTimeRecoveryEnabled: false
+          PointInTimeRecoveryEnabled: true
+        SSESpecification:
+          SSEEnabled: true
+          SSEType: KMS
         Tags:
           - Key: project
             Value: walidator-pomyslu
           - Key: stage
             Value: ${self:provider.stage}
+          - Key: Project
+            Value: walidator-pomyslu
+          - Key: Env
+            Value: ${self:provider.stage}
+          - Key: Owner
+            Value: Artur
 
     DailyReportSchedulerRole:
       Type: AWS::IAM::Role
