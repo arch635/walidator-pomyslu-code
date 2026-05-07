@@ -25,6 +25,7 @@ provider:
     MAX_TURNS_MINI: "12"
     PROMPT_CACHE_ENABLED: "true"
     ENABLE_AUTO_SHUTDOWN: "false"
+    ACCESS_CODE_FULL: ${env:ACCESS_CODE_FULL_WALIDATOR, ''}
   iam:
     role:
       statements:

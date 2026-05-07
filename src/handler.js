@@ -616,6 +616,19 @@ async function handleTurn(event, origin) {
     if (typeof session.assistant_turns_in_current !== "number") session.assistant_turns_in_current = 0;
   } else {
     mode = normalizeMode(payload.mode);
+
+    // Pełna wersja w fazie testowej - kod dostępu wymagany
+    if (mode === "full") {
+      const accessCodeFull = process.env.ACCESS_CODE_FULL || "";
+      if (!accessCodeFull) {
+        return json(503, { status: "error", message: "Pełna wersja jest tymczasowo niedostępna." }, origin);
+      }
+      const provided = typeof payload.access_code === "string" ? payload.access_code.trim() : "";
+      if (provided !== accessCodeFull) {
+        return json(403, { status: "error", message: "Nieprawidłowy kod dostępu." }, origin);
+      }
+    }
+
     session = createSession(message, mode);
   }
 

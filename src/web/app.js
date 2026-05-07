@@ -33,6 +33,8 @@
   const modeDesc = document.getElementById("mode-desc");
   const modeMiniBtn = document.getElementById("mode-mini");
   const modeFullBtn = document.getElementById("mode-full");
+  const accessCodeWrap = document.getElementById("access-code-wrap");
+  const accessCodeInput = document.getElementById("access-code");
   const infoBox = document.getElementById("info-box");
   const feedbackForm = document.getElementById("feedback-form");
   const feedbackSubmit = document.getElementById("feedback-submit");
@@ -110,6 +112,10 @@
       modeFullBtn.setAttribute("aria-checked", mode === "full" ? "true" : "false");
     }
     if (modeDesc) modeDesc.textContent = MODE_DESCRIPTIONS[mode];
+    if (accessCodeWrap) {
+      // Pole pokazuje sie tylko dla full + brak aktywnej sesji (po starcie sesji tryb jest zalockowany).
+      accessCodeWrap.hidden = !(mode === "full" && !sessionId);
+    }
     try { localStorage.setItem(MODE_PREF_KEY, mode); } catch (e) { /* ignore */ }
     if (!(opts && opts.silent)) updateProgress();
   }
@@ -126,12 +132,16 @@
     if (modeToggle) modeToggle.hidden = true;
     if (modeDesc) modeDesc.hidden = true;
     if (infoBox) infoBox.hidden = true;
+    if (accessCodeWrap) accessCodeWrap.hidden = true;
   }
 
   function showToggle() {
     if (modeToggle) modeToggle.hidden = false;
     if (modeDesc) modeDesc.hidden = false;
     if (infoBox) infoBox.hidden = false;
+    if (accessCodeWrap) {
+      accessCodeWrap.hidden = !(mode === "full" && !sessionId);
+    }
   }
 
   function showFeedbackForm(show) {
@@ -301,6 +311,7 @@
     sendBtn.textContent = "Wyślij";
     textarea.value = "";
     updateCount();
+    if (accessCodeInput) accessCodeInput.value = "";
     if (opts && opts.preferredMode) setActiveMode(opts.preferredMode, { silent: true });
     showToggle();
     updateProgress();
@@ -334,8 +345,14 @@
 
   async function sendTurn(message) {
     const body = { message };
-    if (sessionId) body.session_id = sessionId;
-    else body.mode = mode;
+    if (sessionId) {
+      body.session_id = sessionId;
+    } else {
+      body.mode = mode;
+      if (mode === "full" && accessCodeInput) {
+        body.access_code = accessCodeInput.value.trim();
+      }
+    }
 
     const res = await fetch(TURN_URL, {
       method: "POST",
@@ -355,6 +372,14 @@
     if (!message) {
       setError("Wpisz odpowiedź przed wysłaniem.");
       return;
+    }
+    if (!sessionId && mode === "full") {
+      const code = accessCodeInput ? accessCodeInput.value.trim() : "";
+      if (!code) {
+        setError("Pełna wersja jest w fazie testowej. Wpisz kod dostępu od Artura albo wybierz wersję MINI.");
+        if (accessCodeInput) accessCodeInput.focus();
+        return;
+      }
     }
     setError(null);
 
