@@ -25,7 +25,7 @@ provider:
     MAX_TURNS_MINI: "12"
     PROMPT_CACHE_ENABLED: "true"
     ENABLE_AUTO_SHUTDOWN: "false"
-    ACCESS_CODE_FULL: ${env:ACCESS_CODE_FULL_WALIDATOR, ''}
+    ACCESS_CODE_FULL: ${env:ACCESS_CODE_FULL_WALIDATOR, 'PUNKT-2026'}
   iam:
     role:
       statements:
@@ -66,12 +66,30 @@ package:
 functions:
   walidator:
     handler: src/handler.handler
-    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock). /walidator (one-shot) + /walidator/turn (5 pytan mini lub 25 pytan full, sesja w DynamoDB).
+    description: Walidator pomyslu - Claude Haiku 4.5 (Bedrock). /walidator (one-shot) + /walidator/turn (5 pytan mini lub 25 pytan full, sesja w DynamoDB) + /walidator/report/pdf|email (PDF + SES).
+    # Memory podbite dla pdfkit (font embedding) i base64 encoding PDF.
+    memorySize: 1024
+    environment:
+      REPORT_FROM: noreply@theinnerspace.pl
+      REPORT_REPLY_TO: artur@racicki.com
+      REPORT_MAX_MD_BYTES: "20480"
     package:
       patterns:
         - "src/handler.js"
+        - "src/pdfgen.js"
+        - "src/mailer.js"
         - "src/prompts/walidator-v2.md"
         - "src/prompts/walidator-mini.md"
+        - "src/fonts/**"
+        - "node_modules/**"
+        - "!node_modules/serverless/**"
+        - "!node_modules/@serverless/**"
+        - "!node_modules/.bin/**"
+        - "!node_modules/**/test/**"
+        - "!node_modules/**/tests/**"
+        - "!node_modules/**/*.md"
+        - "!node_modules/**/*.ts"
+        - "!node_modules/**/*.map"
     events:
       - httpApi:
           path: /walidator
@@ -97,6 +115,18 @@ functions:
       - httpApi:
           path: /walidator/session/{id}
           method: options
+      - httpApi:
+          path: /walidator/report/pdf
+          method: post
+      - httpApi:
+          path: /walidator/report/pdf
+          method: options
+      - httpApi:
+          path: /walidator/report/email
+          method: post
+      - httpApi:
+          path: /walidator/report/email
+          method: options
 
   walidatorDailyReport:
     handler: src/daily_report.handler
@@ -105,7 +135,8 @@ functions:
     timeout: 30
     environment:
       REPORT_TO: artur@racicki.com
-      REPORT_FROM: artur@racicki.com
+      REPORT_FROM: noreply@theinnerspace.pl
+      REPORT_REPLY_TO: artur@racicki.com
       LOOKBACK_HOURS: "24"
       COST_PER_FINAL_SESSION: "0.083"
       COST_PER_DIALOG_TURN: "0.0033"
@@ -118,7 +149,8 @@ functions:
 
 custom:
   corsOrigins:
-    - https://walidator.racicki.com
+    - https://theinnerspace.pl
+    - https://www.theinnerspace.pl
 
 resources:
   extensions:

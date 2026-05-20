@@ -1,0 +1,10 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /walidator/report/pdf",
+  "rawPath": "/walidator/report/pdf",
+  "requestContext": {
+    "http": { "method": "POST", "path": "/walidator/report/pdf", "sourceIp": "127.0.0.1" }
+  },
+  "headers": { "content-type": "application/json", "origin": "http://localhost:8080" },
+  "body": "{\"markdown\":\"# Test\\n\\nąćęłńóśźż **bold** [link](https://example.com)\",\"title\":\"Test\"}"
+}

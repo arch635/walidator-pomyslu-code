@@ -483,6 +483,87 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   text-decoration-color: var(--star);
 }
 
+/* Notice na samym górze info-boxa: skup uwagi na "porozmawiaj z 5 klientami" */
+.info-box__notice {
+  background: #fff;
+  border-left: 4px solid var(--accent);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.1rem;
+}
+.info-box__notice p { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.info-box__notice strong { font-weight: 600; }
+
+/* Legenda kolorów werdyktu na ekranie startowym */
+.verdict-legend {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 0.5rem;
+}
+.verdict-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin: 0.35rem 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.verdict-legend li::marker { content: ""; }
+.verdict-legend__dot {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.verdict-legend__note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* Pasek pozycji werdyktu w raporcie końcowym */
+.verdict-scale {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0.3rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-muted);
+  letter-spacing: 0.15em;
+}
+.verdict-scale__dot { display: inline-block; }
+.verdict-scale__dot.is-active { color: var(--accent); }
+
+.chat__verdict-meaning {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* Neutralny stan werdyktu (⚪): inny kolor borderu + retry button */
+.chat__verdict--neutral {
+  border-left-color: var(--text-muted);
+}
+.chat__verdict-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.chat__verdict-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.chat__verdict-btn:hover { background: var(--accent-hover); }
+
 .chat__header {
   display: flex;
   align-items: center;
@@ -745,3 +826,69 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   color: var(--star);
   text-decoration-color: var(--star);
 }
+
+/* Report actions (PDF + email) */
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+  align-items: center;
+}
+.report-actions__btn {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #1a2a4a;
+  background: #1a2a4a;
+  color: #fff;
+  cursor: pointer;
+}
+.report-actions__btn:hover { opacity: 0.9; }
+.report-actions__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.report-actions__btn--ghost {
+  background: transparent;
+  color: #1a2a4a;
+}
+.report-actions__status { font-size: 0.85rem; }
+
+/* Modal */
+.report-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.report-modal__backdrop { position: absolute; inset: 0; background: rgba(20, 25, 40, 0.55); }
+.report-modal__panel {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 460px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.report-modal__title { margin: 0 0 0.5rem; font-family: Fraunces, Georgia, serif; color: #1a2a4a; }
+.report-modal__lead { margin: 0 0 1rem; font-size: 0.9rem; }
+.report-modal__form { display: flex; flex-direction: column; gap: 0.75rem; }
+.report-modal__label { font-size: 0.85rem; color: #4a4a4a; }
+.report-modal__form input[type="email"] {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d2d2cc;
+  border-radius: 6px;
+}
+.report-modal__consent { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.85rem; color: #333; }
+.report-modal__consent input { margin-top: 0.2rem; }
+.report-modal__error { color: #a02020; font-size: 0.85rem; }
+.report-modal__actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+.report-modal__btn {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #1a2a4a;
+  background: #1a2a4a;
+  color: #fff;
+  cursor: pointer;
+}
+.report-modal__btn--ghost { background: transparent; color: #1a2a4a; }
+.report-modal__btn:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -61,54 +61,18 @@ if [ -z "$API_ENDPOINT" ] || [ "$API_ENDPOINT" = "None" ]; then
   echo "   ✖ STOP: brak API_ENDPOINT w outputach stacka"; exit 1
 fi
 
-echo "▶ Build frontu (.build/)..."
-rm -rf .build
-mkdir -p .build
-cp src/web/index.html .build/index.html
-cp src/web/styles.css .build/styles.css
-cp src/web/stars.svg .build/stars.svg
-sed "s|__API_ENDPOINT__|${API_ENDPOINT}|g" src/web/app.js > .build/app.js
-
-if [ -z "${BUCKET_PROD:-}" ]; then
-  echo "   ⚠ BUCKET_PROD nie ustawiony - pomijam sync S3."
-  exit 0
-fi
-
-echo "▶ Sync do s3://${BUCKET_PROD}..."
-aws s3 sync .build/ "s3://${BUCKET_PROD}" --delete \
-  --exclude "*.DS_Store"
-
-aws s3 cp .build/index.html "s3://${BUCKET_PROD}/index.html" \
-  --content-type "text/html; charset=utf-8" \
-  --metadata-directive REPLACE --no-progress > /dev/null
-aws s3 cp .build/styles.css "s3://${BUCKET_PROD}/styles.css" \
-  --content-type "text/css; charset=utf-8" \
-  --metadata-directive REPLACE --no-progress > /dev/null
-aws s3 cp .build/app.js "s3://${BUCKET_PROD}/app.js" \
-  --content-type "application/javascript; charset=utf-8" \
-  --metadata-directive REPLACE --no-progress > /dev/null
-aws s3 cp .build/stars.svg "s3://${BUCKET_PROD}/stars.svg" \
-  --content-type "image/svg+xml" \
-  --metadata-directive REPLACE --no-progress > /dev/null
-echo "   ✓ Sync OK"
-
-if [ -n "${CLOUDFRONT_DISTRIBUTION_ID:-}" ]; then
-  echo "▶ Inwalidacja CloudFront ${CLOUDFRONT_DISTRIBUTION_ID}..."
-  INVAL_ID=$(aws cloudfront create-invalidation \
-    --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-    --paths "/*" \
-    --query "Invalidation.Id" --output text)
-  echo "   ✓ Invalidation: $INVAL_ID"
-fi
-
-if [ -n "${CLOUDFRONT_DOMAIN:-}" ]; then
-  echo "▶ Test /  (${CLOUDFRONT_DOMAIN})..."
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${CLOUDFRONT_DOMAIN}/")
-  echo "   / → ${CODE}"
-fi
+# --- 2026-05-16: Frontend NIE jest już deployowany z tego repo. ---
+# Single source of truth dla frontu walidatora:
+#   /Users/aracicki/AI-Biznes/projekty/autofirma/theinnerspace-code/src/walidator/
+# Deploy frontu:
+#   cd ../../theinnerspace-code && ./deploy.sh
+# Powód: kursowi @cmo edytowali bezpośrednio S3, kod żył w 2 miejscach (drift).
+# Po incydencie 2026-05-16 (regresja brandu) skonsolidowane do theinnerspace-code.
+# src/web/ w tym repo jest DEPRECATED (do usunięcia po stabilizacji).
 
 echo ""
-echo "✓ Deploy OK"
+echo "✓ Deploy backend OK"
 echo "   API:        ${API_ENDPOINT}"
-[ -n "${CLOUDFRONT_DOMAIN:-}" ] && echo "   Frontend:   https://${CLOUDFRONT_DOMAIN}/"
-[ -n "${SUBDOMAIN:-}" ]         && echo "   Docelowo:   https://${SUBDOMAIN}/ (po wpięciu DNS)"
+echo ""
+echo "ℹ Frontend deployujesz osobno z theinnerspace-code:"
+echo "   cd ../../theinnerspace-code && ./deploy.sh"

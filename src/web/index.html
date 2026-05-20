@@ -66,12 +66,26 @@
       </div>
 
       <div class="info-box" id="info-box">
+        <div class="info-box__notice">
+          <p><strong>Najpierw porozmawiaj z 5 potencjalnymi klientami.</strong> Walidator porządkuje ich głosy, nie zastępuje rozmów. Bez prawdziwych cytatów werdykt będzie ostrzeżeniem, nie rekomendacją.</p>
+        </div>
+
+        <h3>Skala werdyktu</h3>
+        <ul class="verdict-legend">
+          <li><span class="verdict-legend__dot">🟢</span> <strong>ZIELONE</strong> - fundament gotowy, masz płacącego klienta i konkrety w 80%+ odpowiedzi.</li>
+          <li><span class="verdict-legend__dot">🟡</span> <strong>ŻÓŁTE</strong> - 1 flaga krytyczna lub 3-5 ostrzegawczych. Fundament jest, luki są jasne.</li>
+          <li><span class="verdict-legend__dot">🟠</span> <strong>POMARAŃCZOWE</strong> - 2-3 flagi krytyczne. Większość odpowiedzi ogólna, brakuje dowodów.</li>
+          <li><span class="verdict-legend__dot">🔴</span> <strong>CZERWONE</strong> - 4+ flag krytycznych lub brak rozmów z klientami. Wróć do customer development.</li>
+        </ul>
+        <p class="verdict-legend__note muted">Zielone jest rzadkie - nie spodziewaj się go bez 5+ rozmów z klientami i płacącego early adoptera.</p>
+
         <h3>Jak działa walidator</h3>
         <ul>
           <li><strong>Rozmowa sokratejska</strong> - zadaję pytania, Ty odpowiadasz konkretnie</li>
           <li><strong>Mini</strong> (darmowa): 5 tematów (pomysł, klient, konkurencja, timing, ryzyko) w ~5 minut</li>
           <li><strong>Pełna</strong> (faza testowa, wymaga kodu dostępu): 25 pytań w 6 obszarach w ~25 minut</li>
           <li><strong>Pogłębianie:</strong> jeśli odpowiesz ogólnie, zadam JEDNO pytanie pogłębiające, potem przechodzę dalej</li>
+          <li><strong>Bez nazwisk:</strong> podawaj imię i kanał kontaktu (Slack, mail firmowy), nie nazwiska osób trzecich</li>
           <li><strong>Raport:</strong> werdykt kolorowy + konkretne kroki do zrobienia</li>
         </ul>
         <p class="info-box__footer">
@@ -91,6 +105,33 @@
       <div id="messages" class="chat__messages" aria-live="polite" aria-atomic="false"></div>
 
       <div id="verdict-box" class="chat__verdict" hidden></div>
+
+      <div id="report-actions" class="report-actions" hidden>
+        <button type="button" id="report-pdf-btn" class="report-actions__btn">Pobierz PDF</button>
+        <button type="button" id="report-email-btn" class="report-actions__btn report-actions__btn--ghost">Wyślij na mail</button>
+        <span id="report-status" class="report-actions__status muted" hidden></span>
+      </div>
+
+      <div id="report-email-modal" class="report-modal" hidden role="dialog" aria-modal="true" aria-labelledby="report-email-title">
+        <div class="report-modal__backdrop" id="report-modal-backdrop"></div>
+        <div class="report-modal__panel">
+          <h3 id="report-email-title" class="report-modal__title">Wyślij raport na mail</h3>
+          <p class="report-modal__lead muted">Wpiszesz adres, dostaniesz PDF w mailu. Bez zapisów do newslettera.</p>
+          <form id="report-email-form" class="report-modal__form" novalidate>
+            <label class="report-modal__label" for="report-email-input">Twój adres email</label>
+            <input type="email" id="report-email-input" name="email" maxlength="254" autocomplete="email" required placeholder="ty@firma.pl">
+            <label class="report-modal__consent">
+              <input type="checkbox" id="report-email-consent" name="consent" required>
+              <span>Zgadzam się na jednorazową wysyłkę tego raportu na podany adres.</span>
+            </label>
+            <span id="report-email-error" class="report-modal__error" hidden></span>
+            <div class="report-modal__actions">
+              <button type="button" id="report-email-cancel" class="report-modal__btn report-modal__btn--ghost">Anuluj</button>
+              <button type="submit" id="report-email-submit" class="report-modal__btn">Wyślij PDF</button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <form id="chat-form" class="chat__form" novalidate>
         <label for="message" class="chat__label">Twoja odpowiedź</label>

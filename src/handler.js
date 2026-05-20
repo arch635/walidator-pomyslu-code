@@ -6,8 +6,16 @@ const crypto = require("crypto");
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { renderMarkdownToPdf } = require("./pdfgen");
+const { sendReportEmail, isValidEmail } = require("./mailer");
 
-const ALLOW_ORIGIN_REGEX = /^(https:\/\/walidator\.racicki\.com|https:\/\/[a-z0-9]+\.cloudfront\.net|http:\/\/localhost(:\d+)?)$/i;
+// Report limits (PDF+email)
+const REPORT_MAX_MD_BYTES = parseInt(process.env.REPORT_MAX_MD_BYTES || "20480", 10); // 20 KB
+const REPORT_RATE_WINDOW_MS = 60 * 1000; // 1 minuta
+const REPORT_RATE_MAX = 5; // max 5 requestów PDF/email per IP per minutę
+const reportRateMap = new Map(); // ip -> [{t}, ...] (in-memory, per warm Lambda)
+
+const ALLOW_ORIGIN_REGEX = /^(https:\/\/theinnerspace\.pl|https:\/\/www\.theinnerspace\.pl|https:\/\/[a-z0-9]+\.cloudfront\.net|http:\/\/localhost(:\d+)?)$/i;
 
 const PROMPT_PATH = process.env.PROMPT_PATH || "prompts/walidator-v2.md";
 const PROMPT_PATH_MINI = process.env.PROMPT_PATH_MINI || "prompts/walidator-mini.md";
@@ -184,7 +192,7 @@ Gdy wrócisz z konkretami (liczby, imiona, cytaty, daty), raport będzie dokład
 
 ## Kryteria werdyktu (oparte na danych z rozmowy, nie na samoocenach)
 
-- **🟢 ZIELONE** - 0 flag krytycznych, max 2 ostrzegawcze, konkrety w 80%+ odpowiedzi, co najmniej 1 płacący early adopter z imienia i nazwiska.
+- **🟢 ZIELONE** - 0 flag krytycznych, max 2 ostrzegawcze, konkrety w 80%+ odpowiedzi, co najmniej 1 płacący early adopter z imienia (bez nazwiska) i firmy lub kanału kontaktu.
 - **🟡 ŻÓŁTE** - 1 flaga krytyczna lub 3-5 ostrzegawczych. Fundament jest, luki są jasne.
 - **🟠 POMARAŃCZOWE** - 2-3 flagi krytyczne. Większość odpowiedzi ogólna.
 - **🔴 CZERWONE** - 4+ flagi krytyczne LUB brak customer development (<5 rozmów z klientami).
@@ -274,7 +282,7 @@ const ddbDoc = DynamoDBDocumentClient.from(new DynamoDBClient({ region: BEDROCK_
 function corsHeaders(origin) {
   const allow = origin && ALLOW_ORIGIN_REGEX.test(origin)
     ? origin
-    : "https://walidator.racicki.com";
+    : "https://theinnerspace.pl";
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -698,12 +706,12 @@ async function handleTurn(event, origin) {
   const sanitized = sanitizeReport(cleanText);
   cleanText = sanitized.text;
 
-  // Etap 4 fallback: raport finalny MUSI zawierać stopkę racicki.com.
+  // Etap 4 fallback: raport finalny MUSI zawierać stopkę The Inner Space.
   // Claude w testach ignoruje regułę z promptu; backend gwarantuje stopkę.
   let footerInjected = false;
-  if (isFinal && !/racicki\.com/i.test(cleanText)) {
+  if (isFinal && !/theinnerspace\.pl/i.test(cleanText)) {
     cleanText = cleanText.trimEnd() +
-      "\n\n---\nWalidator korzysta z doświadczeń Artura Racickiego. Pełne bio i kontakt: racicki.com\n";
+      "\n\n---\nWalidator jest częścią The Inner Space. Więcej: theinnerspace.pl\n";
     footerInjected = true;
   }
 
@@ -733,10 +741,11 @@ async function handleTurn(event, origin) {
     session.is_final = true;
     session.werdykt_koncowy = extractVerdict(cleanText);
     // Safety: gdy raport ucięty lub Claude zwrócił pytanie zamiast raportu,
-    // werdykt jest null. Backend dokleja default 🟠 żeby UI nie wisiało
-    // pustym banerem + daily report miał parsable wartość.
+    // werdykt jest null. Backend dokleja NEUTRALNY stan poza skalą (⚪),
+    // żeby UI nie wisiało pustym banerem ale jednocześnie nie udawało
+    // prawdziwego werdyktu (i nie liczyło się jako pomarańczowy w daily).
     if (!session.werdykt_koncowy) {
-      session.werdykt_koncowy = "🟠 POMARAŃCZOWE (backend fallback - brak parsowalnego werdyktu)";
+      session.werdykt_koncowy = "⚪ Werdykt niedostępny - spróbuj wygenerować raport ponownie.";
       verdictMissing = true;
     }
     // Jeśli Claude wygenerował raport ale nie zamknął jeszcze ostatniego tematu
@@ -904,6 +913,151 @@ async function handleGetSession(event, origin) {
 
 // --- Entry point ---
 
+// --- REPORT (PDF + EMAIL) ---
+
+function clientIp(event) {
+  return event?.requestContext?.http?.sourceIp
+    || event?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim()
+    || "unknown";
+}
+
+function rateLimitReport(ip) {
+  const now = Date.now();
+  const arr = (reportRateMap.get(ip) || []).filter((t) => now - t < REPORT_RATE_WINDOW_MS);
+  if (arr.length >= REPORT_RATE_MAX) {
+    return false;
+  }
+  arr.push(now);
+  reportRateMap.set(ip, arr);
+  return true;
+}
+
+function parseReportBody(event) {
+  let body;
+  try {
+    body = typeof event.body === "string"
+      ? JSON.parse(event.body || "{}")
+      : (event.body || {});
+  } catch (e) {
+    return { error: "Nieprawidłowy JSON." };
+  }
+  const markdown = typeof body.markdown === "string" ? body.markdown : "";
+  if (!markdown.trim()) return { error: "Brak treści raportu." };
+  if (Buffer.byteLength(markdown, "utf-8") > REPORT_MAX_MD_BYTES) {
+    return { error: `Raport za duży (limit ${REPORT_MAX_MD_BYTES} bajtów).` };
+  }
+  return {
+    markdown,
+    filename: typeof body.filename === "string" && body.filename.length < 80
+      ? body.filename : "walidator-raport.pdf",
+    email: typeof body.email === "string" ? body.email.trim().toLowerCase() : "",
+    consent: body.consent === true,
+    title: typeof body.title === "string" && body.title.length < 120
+      ? body.title : "Walidator pomysłu – raport",
+    subtitle: typeof body.subtitle === "string" && body.subtitle.length < 200
+      ? body.subtitle : ""
+  };
+}
+
+async function handleReportPdf(event, origin) {
+  const ip = clientIp(event);
+  if (!rateLimitReport(ip)) {
+    return json(429, { status: "error", message: "Za dużo żądań. Spróbuj za chwilę." }, origin);
+  }
+  const parsed = parseReportBody(event);
+  if (parsed.error) return json(400, { status: "error", message: parsed.error }, origin);
+
+  let pdfBuf;
+  try {
+    pdfBuf = await renderMarkdownToPdf(parsed.markdown, {
+      title: parsed.title,
+      subtitle: parsed.subtitle || new Date().toLocaleDateString("pl-PL", {
+        timeZone: "Europe/Warsaw", day: "2-digit", month: "long", year: "numeric"
+      })
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ event: "pdf_render_error", error: err.message }));
+    return json(500, { status: "error", message: "Nie udało się wygenerować PDF." }, origin);
+  }
+
+  console.log(JSON.stringify({ event: "report_pdf_ok", ip, bytes: pdfBuf.length }));
+
+  return {
+    statusCode: 200,
+    isBase64Encoded: true,
+    headers: {
+      ...corsHeaders(origin),
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${parsed.filename}"`,
+      "Cache-Control": "no-store"
+    },
+    body: pdfBuf.toString("base64")
+  };
+}
+
+async function handleReportEmail(event, origin) {
+  const ip = clientIp(event);
+  if (!rateLimitReport(ip)) {
+    return json(429, { status: "error", message: "Za dużo żądań. Spróbuj za chwilę." }, origin);
+  }
+  const parsed = parseReportBody(event);
+  if (parsed.error) return json(400, { status: "error", message: parsed.error }, origin);
+  if (!isValidEmail(parsed.email)) {
+    return json(400, { status: "error", message: "Nieprawidłowy adres email." }, origin);
+  }
+  if (!parsed.consent) {
+    return json(400, { status: "error", message: "Wymagana zgoda na wysyłkę raportu." }, origin);
+  }
+
+  let pdfBuf;
+  try {
+    pdfBuf = await renderMarkdownToPdf(parsed.markdown, {
+      title: parsed.title,
+      subtitle: parsed.subtitle || new Date().toLocaleDateString("pl-PL", {
+        timeZone: "Europe/Warsaw", day: "2-digit", month: "long", year: "numeric"
+      })
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ event: "pdf_render_error_email", error: err.message }));
+    return json(500, { status: "error", message: "Nie udało się wygenerować PDF." }, origin);
+  }
+
+  const subject = "Twój raport z Walidatora pomysłu";
+  const htmlBody = `<!doctype html><html lang="pl"><body style="font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#111; max-width:560px; margin:0 auto; padding:20px;">
+<h2 style="font-family: Georgia, serif; color:#1a2a4a; margin:0 0 12px;">Twój raport z Walidatora</h2>
+<p style="font-size:14px; color:#333;">W załączniku znajdziesz PDF z pełną treścią raportu.</p>
+<p style="font-size:14px; color:#333;">Pytania? Odpowiedz na tę wiadomość – trafi do Artura.</p>
+<p style="margin-top:24px; font-size:12px; color:#777;">theinnerspace.pl · raport wygenerowany automatycznie</p>
+</body></html>`;
+  const textBody = "Twój raport z Walidatora pomysłu.\n\nW załączniku znajdziesz PDF z pełną treścią raportu.\n\nPytania? Odpowiedz na tę wiadomość, trafi do Artura.\n\ntheinnerspace.pl";
+
+  try {
+    const messageId = await sendReportEmail({
+      to: parsed.email,
+      subject,
+      htmlBody,
+      textBody,
+      pdfBuffer: pdfBuf,
+      pdfFilename: parsed.filename
+    });
+    console.log(JSON.stringify({
+      event: "report_email_ok",
+      ip,
+      message_id: messageId,
+      to_domain: parsed.email.split("@")[1]
+    }));
+    return json(200, { status: "ok", message_id: messageId }, origin);
+  } catch (err) {
+    console.error(JSON.stringify({
+      event: "report_email_error",
+      ip,
+      name: err.name,
+      message: err.message
+    }));
+    return json(502, { status: "error", message: "Nie udało się wysłać emaila. Spróbuj ponownie." }, origin);
+  }
+}
+
 exports.handler = async (event) => {
   const method = event?.requestContext?.http?.method || event?.httpMethod || "POST";
   const rawPath = event?.rawPath || event?.requestContext?.http?.path || "";
@@ -919,6 +1073,12 @@ exports.handler = async (event) => {
   }
 
   try {
+    if (rawPath.endsWith("/walidator/report/pdf")) {
+      return await handleReportPdf(event, origin);
+    }
+    if (rawPath.endsWith("/walidator/report/email")) {
+      return await handleReportEmail(event, origin);
+    }
     if (rawPath.endsWith("/walidator/turn")) {
       return await handleTurn(event, origin);
     }

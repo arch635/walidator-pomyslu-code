@@ -1,6 +1,6 @@
 "use strict";
 
-// Codzienny raport e-mail z aktywności walidator.racicki.com.
+// Codzienny raport e-mail z aktywności Walidatora w The Inner Space.
 // Wywoływany przez EventBridge Scheduler codziennie 8:00 Europe/Warsaw.
 
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
@@ -10,7 +10,8 @@ const { SESv2Client, SendEmailCommand } = require("@aws-sdk/client-sesv2");
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE || "walidator-sessions-prod";
 const REGION = process.env.AWS_REGION || "eu-central-1";
 const REPORT_TO = process.env.REPORT_TO || "artur@racicki.com";
-const REPORT_FROM = process.env.REPORT_FROM || "artur@racicki.com";
+const REPORT_FROM = process.env.REPORT_FROM || "noreply@theinnerspace.pl";
+const REPORT_REPLY_TO = process.env.REPORT_REPLY_TO || "artur@racicki.com";
 const LOOKBACK_HOURS = parseInt(process.env.LOOKBACK_HOURS || "24", 10);
 const COST_PER_FINAL_SESSION = parseFloat(process.env.COST_PER_FINAL_SESSION || "0.083");
 const COST_PER_DIALOG_TURN = parseFloat(process.env.COST_PER_DIALOG_TURN || "0.0033");
@@ -46,6 +47,10 @@ async function scanRecentSessions(sinceIso) {
 
 function emojiFromWerdykt(text) {
   if (!text) return null;
+  // ⚪ = neutralny stan poza skalą (backend fallback gdy parser nie znalazł
+  // werdyktu w raporcie). Zwracamy "unparsable" - daily report liczy osobno,
+  // nie miesza ze skalą kolorów ani z prawdziwym "brakiem werdyktu".
+  if (text.includes("⚪")) return "unparsable";
   if (text.includes("🟢")) return "🟢";
   if (text.includes("🟡")) return "🟡";
   if (text.includes("🟠")) return "🟠";
@@ -55,8 +60,8 @@ function emojiFromWerdykt(text) {
 
 function levelNameFromWerdykt(text) {
   if (!text) return "";
-  // Usuń emoji + gwiazdki markdown, zostaw 1-3 słowa opisu poziomu.
-  const clean = text.replace(/[🟢🟡🟠🔴]/g, "").replace(/\*+/g, "").trim();
+  // Usuń emoji (w tym ⚪ neutralny) + gwiazdki markdown, zostaw 1-3 słowa.
+  const clean = text.replace(/[🟢🟡🟠🔴⚪]/g, "").replace(/\*+/g, "").trim();
   return clean.split(/\s+/).slice(0, 3).join(" ");
 }
 
@@ -118,7 +123,8 @@ function estimateCostUsd(sessions) {
 }
 
 function emptyVerdicts() {
-  return { "🟢": 0, "🟡": 0, "🟠": 0, "🔴": 0, unknown: 0 };
+  // unparsable = backend fallback (⚪), oddzielony od unknown (null werdykt).
+  return { "🟢": 0, "🟡": 0, "🟠": 0, "🔴": 0, unparsable: 0, unknown: 0 };
 }
 
 function perModeStats(sessions, sinceIso, modeName) {
@@ -128,7 +134,8 @@ function perModeStats(sessions, sinceIso, modeName) {
   const verdicts = emptyVerdicts();
   for (const s of finals) {
     const emoji = emojiFromWerdykt(s.werdykt_koncowy);
-    if (emoji) verdicts[emoji] += 1;
+    if (emoji === "unparsable") verdicts.unparsable += 1;
+    else if (emoji) verdicts[emoji] += 1;
     else verdicts.unknown += 1;
   }
   return {
@@ -176,7 +183,9 @@ function aggregate(sessions, sinceIso) {
 
   for (const s of finals) {
     const emoji = emojiFromWerdykt(s.werdykt_koncowy);
-    if (emoji) {
+    if (emoji === "unparsable") {
+      verdicts.unparsable += 1;
+    } else if (emoji) {
       verdicts[emoji] += 1;
       const label = levelNameFromWerdykt(s.werdykt_koncowy);
       if (label) verdictLabels[emoji] = label;
@@ -235,6 +244,7 @@ function formatCost(v) { return "$" + v.toFixed(4); }
 
 function verdictLine(v) {
   return `🟢 ${v["🟢"]} / 🟡 ${v["🟡"]} / 🟠 ${v["🟠"]} / 🔴 ${v["🔴"]}`
+    + (v.unparsable ? ` / ⚪ niedostepny ${v.unparsable}` : "")
     + (v.unknown ? ` / (bez werdyktu) ${v.unknown}` : "");
 }
 
@@ -281,6 +291,7 @@ function renderPlainText(agg, since, now) {
   for (const [label, n, ex] of vRows) {
     lines.push(`  ${label}: ${n}${n && ex ? ` (np. "${ex}")` : ""}`);
   }
+  if (agg.verdicts.unparsable) lines.push(`  ⚪ niedostepny (parser fallback): ${agg.verdicts.unparsable}`);
   if (agg.verdicts.unknown) lines.push(`  (bez werdyktu): ${agg.verdicts.unknown}`);
   lines.push("");
 
@@ -365,7 +376,9 @@ function renderHtml(agg, since, now) {
     for (const [label, m] of modeRows) {
       const v = m.verdicts;
       const verdictHtml = m.finals > 0
-        ? `🟢 ${v["🟢"]} &middot; 🟡 ${v["🟡"]} &middot; 🟠 ${v["🟠"]} &middot; 🔴 ${v["🔴"]}` + (v.unknown ? ` &middot; ? ${v.unknown}` : "")
+        ? `🟢 ${v["🟢"]} &middot; 🟡 ${v["🟡"]} &middot; 🟠 ${v["🟠"]} &middot; 🔴 ${v["🔴"]}`
+          + (v.unparsable ? ` &middot; ⚪ ${v.unparsable}` : "")
+          + (v.unknown ? ` &middot; ? ${v.unknown}` : "")
         : '<span style="color:#4a4a4a;">—</span>';
       h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">${escapeHtml(label)}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${m.started}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${m.finals}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; font-size:14px;">${verdictHtml}</td></tr>`);
     }
@@ -381,6 +394,9 @@ function renderHtml(agg, since, now) {
     ];
     for (const [emoji, label, n, ex] of rows) {
       h.push(`<tr><td style="padding:8px 14px; border-bottom:1px solid #f0efea; font-size:18px;">${emoji}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea;">${escapeHtml(label)}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; text-align:right; font-weight:600;">${n}</td><td style="padding:8px 14px; border-bottom:1px solid #f0efea; color:#4a4a4a; font-size:13px;">${n && ex ? "np. &ldquo;" + escapeHtml(ex) + "&rdquo;" : ""}</td></tr>`);
+    }
+    if (agg.verdicts.unparsable) {
+      h.push(`<tr><td style="padding:8px 14px; font-size:18px;">⚪</td><td style="padding:8px 14px;">NIEDOSTEPNY (parser fallback)</td><td style="padding:8px 14px; text-align:right;">${agg.verdicts.unparsable}</td><td></td></tr>`);
     }
     if (agg.verdicts.unknown) {
       h.push(`<tr><td style="padding:8px 14px;" colspan="2">(bez werdyktu)</td><td style="padding:8px 14px; text-align:right;">${agg.verdicts.unknown}</td><td></td></tr>`);
@@ -478,6 +494,7 @@ exports.handler = async (event) => {
   const cmd = new SendEmailCommand({
     FromEmailAddress: REPORT_FROM,
     Destination: { ToAddresses: [REPORT_TO] },
+    ReplyToAddresses: [REPORT_REPLY_TO],
     Content: {
       Simple: {
         Subject: { Data: subject, Charset: "UTF-8" },

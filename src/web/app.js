@@ -10,6 +10,8 @@
   const TURN_URL = API_BASE + "/walidator/turn";
   const FEEDBACK_URL = API_BASE + "/walidator/feedback";
   const SESSION_URL = (id) => API_BASE + "/walidator/session/" + encodeURIComponent(id);
+  const REPORT_PDF_URL = API_BASE + "/walidator/report/pdf";
+  const REPORT_EMAIL_URL = API_BASE + "/walidator/report/email";
   const STORAGE_KEY = "walidator.session_id.v1";
   const MODE_PREF_KEY = "walidator.mode_pref.v1";
   const TOPICS_TOTAL_BY_MODE = { mini: 5, full: 25 };
@@ -52,6 +54,7 @@
   let sessionId = null;
   let isFinal = false;
   let topicsCoveredCount = 0;
+  let lastFinalMarkdown = "";
   let sending = false;
   let feedbackSending = false;
   let mode = DEFAULT_MODE;
@@ -180,6 +183,10 @@
       renderMarkdown(markdown) +
       '</div>';
     messagesEl.appendChild(el);
+    if (opts && opts.final) {
+      lastFinalMarkdown = markdown || "";
+      showReportActions(true);
+    }
     scrollToBottom();
   }
 
@@ -200,12 +207,61 @@
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
+  // Skala kolorów werdyktu (dobra -> zła). Pozycja zaznacza aktualny werdykt.
+  // ⚪ = neutralny stan poza skalą (backend fallback, parser nie znalazł werdyktu).
+  const VERDICT_SCALE = [
+    { emoji: "🟢", name: "ZIELONE", desc: "fundament gotowy, masz konkrety i płacącego klienta" },
+    { emoji: "🟡", name: "ŻÓŁTE", desc: "fundament jest, ale są luki do domknięcia" },
+    { emoji: "🟠", name: "POMARAŃCZOWE", desc: "większość odpowiedzi ogólna, brakuje dowodów" },
+    { emoji: "🔴", name: "CZERWONE", desc: "brak customer development, wróć do rozmów z klientami" }
+  ];
+
+  function detectVerdictPosition(werdykt) {
+    if (!werdykt) return -1;
+    for (let i = 0; i < VERDICT_SCALE.length; i++) {
+      if (werdykt.indexOf(VERDICT_SCALE[i].emoji) !== -1) return i;
+    }
+    return -1;
+  }
+
+  function renderScaleBar(activeIdx) {
+    const dots = VERDICT_SCALE.map((s, i) => {
+      const cls = "verdict-scale__dot" + (i === activeIdx ? " is-active" : "");
+      return '<span class="' + cls + '" title="' + escapeHtml(s.emoji + " " + s.name) + '">' +
+        (i === activeIdx ? "●" : "○") + '</span>';
+    }).join("");
+    return '<div class="verdict-scale" aria-label="Pozycja werdyktu na skali">' + dots + '</div>';
+  }
+
   function showVerdict(werdykt) {
     if (!werdykt) { verdictBox.hidden = true; return; }
     verdictBox.hidden = false;
+
+    // ⚪ = neutralny stan (backend fallback). Pokaż komunikat + przycisk retry,
+    // NIE pokazuj paska skali bo werdykt nie jest na skali.
+    if (werdykt.indexOf("⚪") !== -1) {
+      verdictBox.classList.add("chat__verdict--neutral");
+      verdictBox.innerHTML =
+        '<div class="chat__verdict-label">Werdykt niedostępny</div>' +
+        '<div class="chat__verdict-body">' + escapeHtml(werdykt) + '</div>' +
+        '<div class="chat__verdict-actions">' +
+        '<button type="button" id="verdict-retry-btn" class="chat__verdict-btn">Spróbuj ponownie</button>' +
+        '</div>';
+      const retryBtn = document.getElementById("verdict-retry-btn");
+      if (retryBtn) retryBtn.addEventListener("click", () => resetSession());
+      return;
+    }
+
+    verdictBox.classList.remove("chat__verdict--neutral");
+    const idx = detectVerdictPosition(werdykt);
+    const meaning = idx >= 0
+      ? "To znaczy: " + VERDICT_SCALE[idx].desc + "."
+      : "";
     verdictBox.innerHTML =
       '<div class="chat__verdict-label">Werdykt</div>' +
-      '<div class="chat__verdict-body">' + escapeHtml(werdykt) + '</div>';
+      '<div class="chat__verdict-body">' + escapeHtml(werdykt) + '</div>' +
+      (idx >= 0 ? renderScaleBar(idx) : '') +
+      (meaning ? '<div class="chat__verdict-meaning muted">' + escapeHtml(meaning) + '</div>' : '');
   }
 
   function setInputEnabled(enabled) {
@@ -304,6 +360,11 @@
     showFeedbackForm(false);
     showFeedbackThanks(false);
     resetFeedbackInputs();
+    lastFinalMarkdown = "";
+    const ra = document.getElementById("report-actions");
+    if (ra) ra.hidden = true;
+    const rs = document.getElementById("report-status");
+    if (rs) { rs.hidden = true; rs.textContent = ""; }
     if (form) form.hidden = false;
     if (chatHint) chatHint.hidden = false;
     setError(null);
@@ -532,6 +593,139 @@
       e.preventDefault();
       form.requestSubmit();
     }
+  });
+
+  // --- REPORT actions (PDF + email) ---
+  const reportActionsEl = document.getElementById("report-actions");
+  const reportPdfBtn = document.getElementById("report-pdf-btn");
+  const reportEmailBtn = document.getElementById("report-email-btn");
+  const reportStatus = document.getElementById("report-status");
+  const reportModal = document.getElementById("report-email-modal");
+  const reportModalBackdrop = document.getElementById("report-modal-backdrop");
+  const reportEmailForm = document.getElementById("report-email-form");
+  const reportEmailInput = document.getElementById("report-email-input");
+  const reportEmailConsent = document.getElementById("report-email-consent");
+  const reportEmailCancel = document.getElementById("report-email-cancel");
+  const reportEmailSubmit = document.getElementById("report-email-submit");
+  const reportEmailError = document.getElementById("report-email-error");
+
+  function showReportActions(show) {
+    if (!reportActionsEl) return;
+    reportActionsEl.hidden = !show;
+  }
+
+  function setReportStatus(msg, isError) {
+    if (!reportStatus) return;
+    if (!msg) { reportStatus.hidden = true; reportStatus.textContent = ""; return; }
+    reportStatus.hidden = false;
+    reportStatus.textContent = msg;
+    reportStatus.style.color = isError ? "#a02020" : "#1a5a3e";
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+  }
+
+  async function fetchReportPdf() {
+    if (!lastFinalMarkdown) return;
+    setReportStatus("Generuję PDF...", false);
+    reportPdfBtn.disabled = true;
+    try {
+      const res = await fetch(REPORT_PDF_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markdown: lastFinalMarkdown,
+          filename: "walidator-raport.pdf",
+          title: "Walidator pomysłu – raport",
+          subtitle: "Wygenerowano: " + new Date().toLocaleDateString("pl-PL")
+        })
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error("HTTP " + res.status + " " + t.slice(0, 120));
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, "walidator-raport.pdf");
+      setReportStatus("PDF pobrany.", false);
+    } catch (e) {
+      setReportStatus("Nie udało się wygenerować PDF. " + (e.message || ""), true);
+    } finally {
+      reportPdfBtn.disabled = false;
+    }
+  }
+
+  function openEmailModal() {
+    if (!reportModal) return;
+    reportModal.hidden = false;
+    reportEmailError.hidden = true;
+    reportEmailInput.value = "";
+    reportEmailConsent.checked = false;
+    setTimeout(() => reportEmailInput.focus(), 50);
+  }
+  function closeEmailModal() {
+    if (!reportModal) return;
+    reportModal.hidden = true;
+  }
+
+  async function submitEmailReport(e) {
+    e.preventDefault();
+    reportEmailError.hidden = true;
+    const email = (reportEmailInput.value || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      reportEmailError.textContent = "Wpisz poprawny adres email.";
+      reportEmailError.hidden = false;
+      return;
+    }
+    if (!reportEmailConsent.checked) {
+      reportEmailError.textContent = "Zaznacz zgodę na wysyłkę.";
+      reportEmailError.hidden = false;
+      return;
+    }
+    reportEmailSubmit.disabled = true;
+    setReportStatus("Wysyłam mail...", false);
+    try {
+      const res = await fetch(REPORT_EMAIL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markdown: lastFinalMarkdown,
+          email,
+          consent: true,
+          filename: "walidator-raport.pdf",
+          title: "Walidator pomysłu – raport",
+          subtitle: "Wygenerowano: " + new Date().toLocaleDateString("pl-PL")
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== "ok") {
+        throw new Error(data.message || "HTTP " + res.status);
+      }
+      closeEmailModal();
+      setReportStatus("Mail wysłany na " + email + ".", false);
+    } catch (e) {
+      reportEmailError.textContent = "Nie udało się wysłać. " + (e.message || "");
+      reportEmailError.hidden = false;
+      setReportStatus("", false);
+    } finally {
+      reportEmailSubmit.disabled = false;
+    }
+  }
+
+  if (reportPdfBtn) reportPdfBtn.addEventListener("click", fetchReportPdf);
+  if (reportEmailBtn) reportEmailBtn.addEventListener("click", openEmailModal);
+  if (reportEmailCancel) reportEmailCancel.addEventListener("click", closeEmailModal);
+  if (reportModalBackdrop) reportModalBackdrop.addEventListener("click", closeEmailModal);
+  if (reportEmailForm) reportEmailForm.addEventListener("submit", submitEmailReport);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && reportModal && !reportModal.hidden) closeEmailModal();
   });
 
   // init

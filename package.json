@@ -12,5 +12,8 @@
   },
   "devDependencies": {
     "serverless": "^4.34.0"
+  },
+  "dependencies": {
+    "pdfkit": "^0.18.0"
   }
 }
